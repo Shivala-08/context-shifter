@@ -1,0 +1,75 @@
+name: Release .dmg
+
+# Builds Context Transfer.app, packs an unsigned .dmg, and attaches it to a
+# GitHub Release. Runs automatically on v* tags, or manually via
+# workflow_dispatch with a release tag (e.g. v0.1.0).
+#
+# The build is ad-hoc signed (no Apple Developer cert in CI), so macOS
+# Gatekeeper warns on first launch. Users bypass once with right-click ->
+# Open, or: xattr -cr "/Applications/Context Transfer.app"
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Existing release tag to attach the .dmg to (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  dmg:
+    name: Build & attach .dmg
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ inputs.release_tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build app bundle
+        run: |
+          chmod +x Scripts/build-app.sh
+          SIGN_IDENTITY="-" ./Scripts/build-app.sh
+
+      - name: Pack .dmg
+        run: |
+          NAME="ContextTransfer-${{ steps.tag.outputs.tag }}-macOS.dmg"
+          rm -rf .build/dmg-staging dist
+          mkdir -p .build/dmg-staging dist
+          cp -R ".build/app/Context Transfer.app" .build/dmg-staging/
+          ln -s /Applications .build/dmg-staging/Applications
+          hdiutil create -volname "Context Transfer" \
+            -srcfolder .build/dmg-staging \
+            -ov -format UDZO "dist/${NAME}"
+          echo "DMG_PATH=dist/${NAME}" >> "$GITHUB_ENV"
+          echo "DMG_NAME=${NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact (always, for debugging)
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DMG_NAME }}
+          path: ${{ env.DMG_PATH }}
+          retention-days: 14
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+                 --title "Context Transfer $TAG" \
+                 --notes "Download the .dmg, drag Context Transfer to Applications. Unsigned build: on first launch right-click the app and choose Open (or run xattr -cr \"/Applications/Context Transfer.app\" to skip the Gatekeeper prompt)."
+          gh release upload "$TAG" "$DMG_PATH" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "Attached $DMG_NAME to release $TAG"
