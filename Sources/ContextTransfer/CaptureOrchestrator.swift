@@ -131,17 +131,22 @@ final class CaptureOrchestrator: ObservableObject {
             ollamaHost: defaults.string(forKey: SettingsKeys.ollamaHost) ?? OllamaBackend.defaultHost,
             ollamaModel: defaults.string(forKey: SettingsKeys.ollamaModel) ?? OllamaBackend.defaultModel
         )
+        // Compression level is picked in Settings and applied per capture, so
+        // changing it takes effect on the next shortcut press (no relaunch).
+        let level = CompressionLevel(
+            rawValue: defaults.string(forKey: SettingsKeys.compressionLevel) ?? ""
+        ) ?? .balanced
 
         do {
-            let card = try await backend.extractContext(from: conversation)
+            let (card, stats) = try await backend.extractContext(from: conversation, level: level)
             restoreClipboard?()
             // Task 4b: a malformed card is still delivered, but in a dedicated
             // needs-review state so it's clearly not a clean success.
             let state: FloatingPanelController.State
             if let warning = ExtractionWarning.shared.consume() {
-                state = .needsReview(card: card, warning: warning)
+                state = .needsReview(card: card, warning: warning, stats: stats)
             } else {
-                state = .success(card)
+                state = .success(card: card, stats: stats)
                 CaptureFeedback.playSuccessIfEnabled()
             }
             presentOutcome(state)

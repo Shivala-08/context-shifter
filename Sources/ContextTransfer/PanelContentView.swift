@@ -44,9 +44,19 @@ struct PanelContentView: View {
     /// The extracted card, when the state carries one (success or needsReview).
     private var cardText: String? {
         switch state {
-        case .success(let card): return card
-        case .needsReview(let card, _): return card
+        case .success(let card, _): return card
+        case .needsReview(let card, _, _): return card
         case .loading, .failure: return nil
+        }
+    }
+
+    /// Compression accounting for the current card, when available.
+    private var statsText: String? {
+        switch state {
+        case .success(_, let stats), .needsReview(_, _, let stats):
+            return stats.summary.isEmpty ? nil : stats.summary
+        case .loading, .failure:
+            return nil
         }
     }
 
@@ -100,13 +110,22 @@ struct PanelContentView: View {
                 .help("Dismiss (esc)")
             }
 
+            // Compression accounting: what the capture shrank the
+            // conversation to (e.g. "18.4k → 2.1k tokens · 89% smaller").
+            if let statsText {
+                Text(statsText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
             switch state {
             case .loading:
                 Text("Talking to \(backendLabel())…")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-            case .success(let card):
+            case .success(let card, _):
                 ScrollView {
                     Text(card)
                         .textSelection(.enabled)
@@ -115,7 +134,7 @@ struct PanelContentView: View {
                 }
                 .frame(maxHeight: 260)
 
-            case .needsReview(_, let warning):
+            case .needsReview(_, let warning, _):
                 // The one thing the user must not miss: the model didn't
                 // follow the expected format, so sections/links may be wrong.
                 Text(warning)

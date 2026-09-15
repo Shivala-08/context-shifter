@@ -12,6 +12,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.backendType) private var backendTypeRaw: String = BackendType.local.rawValue
     @AppStorage(SettingsKeys.ollamaHost) private var ollamaHost = OllamaBackend.defaultHost
     @AppStorage(SettingsKeys.ollamaModel) private var ollamaModel = OllamaBackend.defaultModel
+    // Context compression: how much of the conversation survives into the
+    // card. Stored as the CompressionLevel raw string for @AppStorage.
+    @AppStorage(SettingsKeys.compressionLevel) private var compressionLevelRaw: String = CompressionLevel.balanced.rawValue
     @AppStorage(SettingsKeys.hotKey) private var hotKeyRaw: String = ""
     @AppStorage(SettingsKeys.restoreClipboard) private var restoreClipboard = true
     @AppStorage(SettingsKeys.copyCaptureTrailOnFailure) private var copyCaptureTrailOnFailure = false
@@ -62,6 +65,7 @@ struct SettingsView: View {
     private var backendType: BackendType { BackendType(rawValue: backendTypeRaw) ?? .local }
     private var panelPlacement: PanelPlacement { PanelPlacement(rawValue: panelPlacementRaw) ?? .nearCursor }
     private var currentCombo: HotKeyCombo { recordedCombo ?? HotKeyCodec.decode(hotKeyRaw) ?? .default }
+    private var compressionLevel: CompressionLevel { CompressionLevel(rawValue: compressionLevelRaw) ?? .balanced }
 
     private var captureExclusions: [String] {
         captureExclusionsRaw
@@ -121,6 +125,18 @@ struct SettingsView: View {
                         refreshModels()
                     }
                 }
+
+                // TRD-style level picker (Full / Balanced / Minimal): picked
+                // here, applied by whichever backend runs the next extraction.
+                Picker("Compression", selection: $compressionLevelRaw) {
+                    ForEach(CompressionLevel.allCases) { level in
+                        Text(level.label).tag(level.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                Text(compressionLevel.explanation)
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
 
                 switch backendType {
                 case .cloud:

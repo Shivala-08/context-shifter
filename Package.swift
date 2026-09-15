@@ -7,6 +7,17 @@ import PackageDescription
 let packageRoot = String(#filePath.dropLast("/Package.swift".count))
 let infoPlist = packageRoot + "/Resources/Info.plist"
 
+// Shared because the test executable must embed the same Info.plist section
+// as the app executable for the link to succeed against it.
+let infoPlistLinkerSettings: [LinkerSetting] = [
+    .unsafeFlags([
+        "-Xlinker", "-sectcreate",
+        "-Xlinker", "__TEXT",
+        "-Xlinker", "__info_plist",
+        "-Xlinker", infoPlist,
+    ])
+]
+
 let package = Package(
     name: "ContextTransfer",
     platforms: [.macOS(.v13)],
@@ -14,14 +25,13 @@ let package = Package(
         .executableTarget(
             name: "ContextTransfer",
             path: "Sources/ContextTransfer",
-            linkerSettings: [
-                .unsafeFlags([
-                    "-Xlinker", "-sectcreate",
-                    "-Xlinker", "__TEXT",
-                    "-Xlinker", "__info_plist",
-                    "-Xlinker", infoPlist,
-                ])
-            ]
-        )
+            linkerSettings: infoPlistLinkerSettings
+        ),
+        .testTarget(
+            name: "ContextTransferTests",
+            dependencies: ["ContextTransfer"],
+            path: "Tests/ContextTransferTests",
+            linkerSettings: infoPlistLinkerSettings
+        ),
     ]
 )

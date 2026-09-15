@@ -22,6 +22,7 @@ A native macOS menu bar app that turns any LLM or app conversation into a portab
   - **Local (Ollama)** — default, free, private; model list fetched from your Ollama install; explicit 8K context window
   - **Cloud (Anthropic)** — `claude-sonnet-4-6`; your API key stored in Keychain
 - **Validation + retry** — malformed model output retried once, then flagged for review instead of silently passing
+- **Compression levels** — Full / Balanced / Minimal control how much of the conversation survives into the card; the panel reports the reduction (e.g. `18.4k → 2.1k tokens · 89% smaller`)
 - **Launch at login** — toggle in Settings
 - **Zero dependencies** — SwiftUI + AppKit, `URLSession` for all HTTP
 
@@ -56,6 +57,18 @@ Grab the latest release from [Releases](https://github.com/Shivala-08/context-sh
 3. **Copy** the card and **paste** into your new session/app
 
 The card contains: **Goal**, **Key Decisions**, **Constraints & Preferences**, **Current State**, **Resources & Links** (copied verbatim), **Open Questions** — tight bullets meant as a first message in a fresh session.
+
+### Compression levels
+
+Pick how aggressively conversations are compressed — Settings → *Compression*, or the picker in the paste-in window:
+
+| Level | Behavior |
+|---|---|
+| **Full** | Keeps the most detail: decision rationale, names, values, exact error messages |
+| **Balanced** *(default)* | Drops greetings and filler; keeps every decision, constraint, question, and link |
+| **Minimal** | At most 2 short bullets per section — links still copied verbatim |
+
+Every capture reports the reduction: the floating panel and the paste-in window show original vs. card token estimate (e.g. `18.4k → 2.1k tokens · 89% smaller`). Estimates use a ~4 characters-per-token heuristic.
 
 Longer-form design docs (PRD, TRD, build manual) live in [docs/](docs/).
 

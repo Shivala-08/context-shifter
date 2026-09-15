@@ -10,7 +10,7 @@ struct AnthropicBackend: ExtractionBackend {
     static let maxTokens = 1500
 
     /// One raw API round-trip; also reused by the Task 4b validation retry.
-    private func rawExtract(from conversation: String) async throws -> String {
+    private func rawExtract(from conversation: String, level: CompressionLevel) async throws -> String {
         guard !apiKey.trimmingCharacters(in: .whitespaces).isEmpty else {
             throw ExtractionError.emptyAPIKey
         }
@@ -24,8 +24,10 @@ struct AnthropicBackend: ExtractionBackend {
 
         let body: [String: Any] = [
             "model": Self.model,
-            "max_tokens": Self.maxTokens,
-            "system": systemPrompt,
+            // Cap follows the compression level so Minimal can't produce a
+            // Full-sized card even if the model rambles.
+            "max_tokens": level.maxOutputTokens,
+            "system": systemPrompt(for: level),
             "messages": [
                 [
                     "role": "user",
@@ -51,8 +53,19 @@ struct AnthropicBackend: ExtractionBackend {
     }
 
     func extractContext(from conversation: String) async throws -> String {
-        let (card, needsWarning) = try await ContextCardValidation.extractValidated(rawExtract, conversation: conversation)
+        try await extractContext(from: conversation, level: .balanced).card
+    }
+
+    func extractContext(
+        from conversation: String,
+        level: CompressionLevel
+    ) async throws -> (card: String, stats: CompressionStats) {
+        let (card, needsWarning) = try await ContextCardValidation.extractValidated(
+            { try await self.rawExtract(from: $0, level: level) },
+            conversation: conversation
+        )
         if needsWarning { ExtractionWarning.shared.set() }
-        return card
+        let stats = CompressionStats(original: conversation, compressed: card)
+        return (card, stats)
     }
 }

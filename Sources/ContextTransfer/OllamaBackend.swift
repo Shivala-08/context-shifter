@@ -76,12 +76,12 @@ struct OllamaBackend: ExtractionBackend {
     }
 
     /// One raw API round-trip; also reused by the Task 4b validation retry.
-    private func rawExtract(from conversation: String) async throws -> String {
+    private func rawExtract(from conversation: String, level: CompressionLevel) async throws -> String {
         // Ollama's /api/generate has no separate system-prompt field the way the
         // Anthropic API does — concatenate system prompt + conversation into one
         // prompt string.
         let prompt = """
-        \(systemPrompt)
+        \(systemPrompt(for: level))
 
         Here is the conversation to extract from:
 
@@ -111,7 +111,9 @@ struct OllamaBackend: ExtractionBackend {
             "think": false,
             "options": [
                 "num_ctx": Self.numCtx,
-                "num_predict": Self.maxOutputTokens,
+                // Cap follows the compression level so Minimal actually
+                // produces a smaller card, not just a differently-worded one.
+                "num_predict": level.maxOutputTokens,
             ],
         ]
 
@@ -149,9 +151,20 @@ struct OllamaBackend: ExtractionBackend {
     }
 
     func extractContext(from conversation: String) async throws -> String {
-        let (card, needsWarning) = try await ContextCardValidation.extractValidated(rawExtract, conversation: conversation)
+        try await extractContext(from: conversation, level: .balanced).card
+    }
+
+    func extractContext(
+        from conversation: String,
+        level: CompressionLevel
+    ) async throws -> (card: String, stats: CompressionStats) {
+        let (card, needsWarning) = try await ContextCardValidation.extractValidated(
+            { try await self.rawExtract(from: $0, level: level) },
+            conversation: conversation
+        )
         if needsWarning { ExtractionWarning.shared.set() }
-        return card
+        let stats = CompressionStats(original: conversation, compressed: card)
+        return (card, stats)
     }
 }
 

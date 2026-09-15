@@ -5,11 +5,144 @@ import Foundation
 protocol ExtractionBackend {
     /// Extracts a structured context card (markdown) from a raw conversation.
     func extractContext(from conversation: String) async throws -> String
+
+    /// Extracts a card at the requested compression level and reports how much
+    /// the source shrank. Default implementation wraps `extractContext(from:)`
+    /// so existing conformers keep compiling while adopting levels gradually.
+    func extractContext(
+        from conversation: String,
+        level: CompressionLevel
+    ) async throws -> (card: String, stats: CompressionStats)
+}
+
+extension ExtractionBackend {
+    func extractContext(
+        from conversation: String,
+        level: CompressionLevel
+    ) async throws -> (card: String, stats: CompressionStats) {
+        let card = try await extractContext(from: conversation)
+        return (card, CompressionStats(originalTokens: CompressionStats.estimateTokens(of: conversation), compressedTokens: CompressionStats.estimateTokens(of: card)))
+    }
+}
+
+/// How aggressively the model should compress the conversation into a card.
+/// Persisted as a raw string in UserDefaults (SettingsKeys.compressionLevel).
+enum CompressionLevel: String, CaseIterable, Identifiable {
+    /// Preserve the most detail — everything the model deems relevant.
+    case full
+    /// The default: trim small talk and filler, keep decisions and links.
+    case balanced
+    /// Smallest possible card: goal, key decisions, links only.
+    case minimal
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .full: return "Full"
+        case .balanced: return "Balanced"
+        case .minimal: return "Minimal"
+        }
+    }
+
+    /// One-line explanation shown under the Settings picker.
+    var explanation: String {
+        switch self {
+        case .full:
+            return "Keep the most detail — thorough bullets in every section."
+        case .balanced:
+            return "Trim filler and small talk; keep decisions, constraints, and links."
+        case .minimal:
+            return "Smallest card — goal, key decisions, and links only."
+        }
+    }
+
+    /// Extra rules appended to the shared system prompt for this level.
+    var promptInstruction: String {
+        switch self {
+        case .full:
+            return """
+            Compression level: FULL.
+            - Preserve as much relevant detail as the sections allow: full decision rationale, specific names/values, exact versions, and error messages.
+            - Never drop concrete facts to save space.
+            """
+        case .balanced:
+            return """
+            Compression level: BALANCED (default).
+            - Drop greetings, filler, and small talk entirely.
+            - Keep every decision, constraint, open question, and link.
+            - Compress background narrative into a single bullet per topic.
+            """
+        case .minimal:
+            return """
+            Compression level: MINIMAL.
+            - Output at most 2 bullets per section (Resources & Links is exempt: every link goes in verbatim).
+            - Each bullet must be one short sentence. Omit all background, narrative, and rationale.
+            - If a decision depends on missing context, note that dependency in a few words instead of explaining it.
+            """
+        }
+    }
+
+    /// Hard output cap passed to the backend. Also nudges Anthropic's
+    /// max_tokens and Ollama's num_predict so a chatty model can't undo
+    /// the level's intent.
+    var maxOutputTokens: Int {
+        switch self {
+        case .full: return 2048
+        case .balanced: return 1024
+        case .minimal: return 512
+        }
+    }
+}
+
+/// Original-vs-card size accounting, shown in the UI so the user sees what
+/// the compression bought them (e.g. "18.4k → 2.1k tokens (89% smaller)").
+/// Tokens use the same ~4-chars-per-token heuristic as OllamaBackend.
+struct CompressionStats: Equatable {
+    let originalTokens: Int
+    let compressedTokens: Int
+
+    init(originalTokens: Int, compressedTokens: Int) {
+        self.originalTokens = max(0, originalTokens)
+        self.compressedTokens = max(0, compressedTokens)
+    }
+
+    init(original: String, compressed: String) {
+        self.init(
+            originalTokens: Self.estimateTokens(of: original),
+            compressedTokens: Self.estimateTokens(of: compressed)
+        )
+    }
+
+    /// 0.0–1.0 fraction of the original that the card occupies.
+    var reductionRatio: Double {
+        guard originalTokens > 0 else { return 0 }
+        return 1 - Double(compressedTokens) / Double(originalTokens)
+    }
+
+    /// "18.4k → 2.1k tokens · 89% smaller" — empty for degenerate inputs.
+    var summary: String {
+        guard originalTokens > 0 else { return "" }
+        let pct = Int((reductionRatio * 100).rounded())
+        let pctText = pct > 0 ? " · \(pct)% smaller" : " (no reduction)"
+        return "\(Self.compactTokenCount(originalTokens)) → \(Self.compactTokenCount(compressedTokens)) tokens\(pctText)"
+    }
+
+    /// ~4 characters per token, matching OllamaBackend.estimatedTokenCount.
+    static func estimateTokens(of text: String) -> Int {
+        text.count / 4
+    }
+
+    /// "18400" → "18.4k" so the panel line stays short.
+    static func compactTokenCount(_ tokens: Int) -> String {
+        tokens >= 1000 ? String(format: "%.1fk", Double(tokens) / 1000) : "\(tokens)"
+    }
 }
 
 /// Shared system prompt: both backends receive the exact same instructions so
-/// their output shape is interchangeable.
-let systemPrompt = """
+/// their output shape is interchangeable. The compression level's rules are
+/// appended per call so Full/Balanced/Minimal share one card shape.
+let systemPromptBase = """
 You extract a portable "context card" from an LLM/app conversation so work can \
 resume in a different session. Output ONLY a markdown block with these exact \
 sections, in this order, using bullet points, with no preamble and no closing remarks:
@@ -34,6 +167,11 @@ link; it will guess, and a guessed link is worse than no link.
 session, not read as a report.
 - Do not add any other sections, headings, or commentary.
 """
+
+/// Base rules + the selected compression level's extra instructions.
+func systemPrompt(for level: CompressionLevel) -> String {
+    "\(systemPromptBase)\n\n\(level.promptInstruction)"
+}
 
 /// Task 4b — non-thread-safe-ish flag raised by a backend when the returned
 /// card failed shape validation even after the retry. Consumed and reset by

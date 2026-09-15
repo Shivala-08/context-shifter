@@ -9,10 +9,11 @@ final class FloatingPanelController {
     /// Why the panel is currently visible, if it is.
     enum State {
         case loading
-        case success(String)
+        /// Card plus compression accounting (original vs. card tokens).
+        case success(card: String, stats: CompressionStats)
         /// Card returned but failed format validation even after one retry —
         /// shown with a warning band, not as a flat failure.
-        case needsReview(card: String, warning: String)
+        case needsReview(card: String, warning: String, stats: CompressionStats)
         /// Capture/extraction error. `diagnostics` is the optional step-by-step
         /// trail of what the capture pipeline tried (shown small under the
         /// message); empty for extraction errors, which have no capture trail.

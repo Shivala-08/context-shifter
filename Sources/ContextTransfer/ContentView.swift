@@ -8,6 +8,9 @@ enum SettingsKeys {
     static let anthropicAPIKey = "anthropicAPIKey"
     static let ollamaHost = "ollamaHost"
     static let ollamaModel = "ollamaModel"
+    /// How aggressively to compress the conversation into the card:
+    /// CompressionLevel raw value (full / balanced / minimal).
+    static let compressionLevel = "compressionLevel"
     static let hotKey = "hotKey"
     static let restoreClipboard = "restoreClipboard"
     static let panelPlacement = "panelPlacement"
@@ -60,11 +63,16 @@ struct ContentView: View {
     @AppStorage(SettingsKeys.backendType) private var backendTypeRaw: String = BackendType.local.rawValue
     @AppStorage(SettingsKeys.ollamaHost) private var ollamaHost = OllamaBackend.defaultHost
     @AppStorage(SettingsKeys.ollamaModel) private var ollamaModel = OllamaBackend.defaultModel
+    // Compression level (Full/Balanced/Minimal); re-read per extraction so a
+    // Settings change applies to the next run without reopening the window.
+    @AppStorage(SettingsKeys.compressionLevel) private var compressionLevelRaw: String = CompressionLevel.balanced.rawValue
 
     @State private var inputText = ""
     @State private var outputText = ""
     @State private var errorMessage: String?
     @State private var formatWarning: String?
+    /// Compression accounting for the last extraction (original vs. card).
+    @State private var compressionStats: CompressionStats?
     @State private var isLoading = false
     @State private var showSettings = false
     @State private var copied = false
@@ -79,6 +87,15 @@ struct ContentView: View {
         else { return nil }
         let estimate = OllamaBackend.estimatedTokenCount(of: inputText)
         return "This conversation is long (~\(estimate) tokens) and may exceed the local model's context window (\(OllamaBackend.numCtx)); it could be truncated."
+    }
+
+    /// Live size estimate for the pasted conversation (~4 chars/token — same
+    /// heuristic as the context-window warning), shown before extraction so
+    /// the input size is legible against the card's reported reduction stats.
+    private var liveTokenEstimate: String? {
+        guard !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return nil }
+        let tokens = CompressionStats.estimateTokens(of: inputText)
+        return "~\(CompressionStats.compactTokenCount(tokens)) tokens"
     }
 
     var body: some View {
@@ -107,6 +124,19 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                             .padding(.top, 8)
                             .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                    }
+                }
+                // Live token estimate, overlaid (not stacked) so the layout
+                // never shifts as the user types; non-hittable so it can't
+                // steal clicks meant for the editor.
+                .overlay(alignment: .bottomTrailing) {
+                    if let liveTokenEstimate {
+                        Text(liveTokenEstimate)
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                            .monospacedDigit()
+                            .padding(6)
                             .allowsHitTesting(false)
                     }
                 }
@@ -140,11 +170,21 @@ struct ContentView: View {
 
                 Spacer()
 
+                Picker("Compression", selection: $compressionLevelRaw) {
+                    ForEach(CompressionLevel.allCases) { level in
+                        Text(level.label).tag(level.rawValue)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .fixedSize()
+                .help("How much of the conversation survives into the context card")
+
                 Button("Clear") {
                     inputText = ""
                     outputText = ""
                     errorMessage = nil
                     formatWarning = nil
+                    compressionStats = nil
                 }
                 .disabled(isLoading)
 
@@ -165,6 +205,14 @@ struct ContentView: View {
             HStack {
                 Text("Context Card")
                     .font(.headline)
+                if let stats = compressionStats, !stats.summary.isEmpty {
+                    // e.g. "18.4k → 2.1k tokens · 89% smaller"
+                    Text(stats.summary)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .monospacedDigit()
+                        .help("Estimated with a ~4 characters-per-token heuristic")
+                }
                 Spacer()
                 Button {
                     copyOutput()
@@ -251,6 +299,7 @@ struct ContentView: View {
         errorMessage = nil
         formatWarning = nil
         outputText = ""
+        compressionStats = nil
 
         let backend = BackendFactory.make(
             backendType: backendTypeRaw,
@@ -262,11 +311,13 @@ struct ContentView: View {
 
         Task { @MainActor in
             do {
-                let card = try await backend.extractContext(from: conversation)
+                let level = CompressionLevel(rawValue: compressionLevelRaw) ?? .balanced
+                let (card, stats) = try await backend.extractContext(from: conversation, level: level)
                 // Task 4b: malformed output is shown but flagged, never
                 // silently presented as if it were fine.
                 formatWarning = ExtractionWarning.shared.consume()
                 outputText = card
+                compressionStats = stats
             } catch {
                 _ = ExtractionWarning.shared.consume() // reset for the next run
                 errorMessage = error.localizedDescription
