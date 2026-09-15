@@ -13,7 +13,10 @@ final class FloatingPanelController {
         /// Card returned but failed format validation even after one retry —
         /// shown with a warning band, not as a flat failure.
         case needsReview(card: String, warning: String)
-        case failure(String)
+        /// Capture/extraction error. `diagnostics` is the optional step-by-step
+        /// trail of what the capture pipeline tried (shown small under the
+        /// message); empty for extraction errors, which have no capture trail.
+        case failure(String, diagnostics: String)
     }
 
     private var panel: NSPanel?

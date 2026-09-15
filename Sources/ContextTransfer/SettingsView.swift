@@ -1,4 +1,5 @@
 import SwiftUI
+import Carbon.HIToolbox
 
 /// Settings — extraction backend (Phase 1) + quick-capture options (Phase 2).
 /// The Anthropic API key lives in the Keychain (Task 4c); all other values
@@ -13,6 +14,9 @@ struct SettingsView: View {
     @AppStorage(SettingsKeys.ollamaModel) private var ollamaModel = OllamaBackend.defaultModel
     @AppStorage(SettingsKeys.hotKey) private var hotKeyRaw: String = ""
     @AppStorage(SettingsKeys.restoreClipboard) private var restoreClipboard = true
+    @AppStorage(SettingsKeys.copyCaptureTrailOnFailure) private var copyCaptureTrailOnFailure = false
+    @AppStorage(SettingsKeys.soundOnCaptureSuccess) private var soundOnCaptureSuccess = false
+    @AppStorage(SettingsKeys.soundOnCaptureFailure) private var soundOnCaptureFailure = true
     @AppStorage(SettingsKeys.panelPlacement) private var panelPlacementRaw: String = PanelPlacement.nearCursor.rawValue
     @AppStorage(SettingsKeys.panelCorner) private var panelCornerRaw: String = PanelPlacement.Corner.topRight.rawValue
     // TRD 3.3: user-added capture exclusion apps (array as joined string).
@@ -32,12 +36,26 @@ struct SettingsView: View {
 
     // Hotkey recorder state.
     @State private var recordedCombo: HotKeyCombo?
+    @State private var showKeyboardPicker = false
 
-    // TRD 3.2: "Test shortcut" collision check.
-    @State private var isTestingHotKey = false
+    // Hotkey ownership check. No countdown-guessing: the system tells us
+    // directly whether the combo is free, then we listen for a real press.
     @State private var hotKeyTestResult: HotKeyTestResult?
+    @State private var isListeningForPress = false
     @State private var hotKeyTestObserver: NSObjectProtocol?
-    @State private var hotKeyTestTimeout: DispatchWorkItem?
+    @State private var hotKeyListenTimeout: DispatchWorkItem?
+    // Inline collision diagnosis (likely owner apps) for a taken combo.
+    @State private var collisionReport: String?
+    @State private var didCopyCollisionReport = false
+
+    // Full-pipeline self-check results (Run diagnostics button).
+    @State private var pipelineReport: PipelineDiagnostics.Report?
+
+    // Accessibility trust banner: global key monitors silently don't exist
+    // without the grant, so Settings says so instead of leaving a dead
+    // shortcut that "Test shortcut" blames on other apps.
+    @State private var accessibilityTrusted = AccessibilityOnboarding.isTrusted()
+    @State private var trustPollTimer: Timer?
 
     // TRD 3.3: exclusion list editor state.
     @State private var newExclusionBundleID = ""
@@ -51,6 +69,27 @@ struct SettingsView: View {
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
+    }
+
+    /// Combos that would collide with everyday text editing / app control if
+    /// a global monitor swallowed them. The recorder still accepts them (the
+    /// user may genuinely want, say, ⌃V), but Settings shows the warning.
+    private static let reservedCombos: [(keyCode: UInt32, modifiers: NSEvent.ModifierFlags, label: String)] = [
+        (UInt32(kVK_ANSI_C), .command, "⌘C (copy)"),
+        (UInt32(kVK_ANSI_V), .command, "⌘V (paste)"),
+        (UInt32(kVK_ANSI_X), .command, "⌘X (cut)"),
+        (UInt32(kVK_ANSI_A), .command, "⌘A (select all)"),
+        (UInt32(kVK_ANSI_Z), .command, "⌘Z (undo)"),
+        (UInt32(kVK_ANSI_W), .command, "⌘W (close window)"),
+        (UInt32(kVK_ANSI_Q), .command, "⌘Q (quit)"),
+        (UInt32(kVK_Tab), .command, "⌘Tab (app switcher)"),
+    ]
+
+    private var reservedCollision: String? {
+        guard let combo = recordedCombo else { return nil }
+        return Self.reservedCombos.first {
+            $0.keyCode == combo.keyCode && UInt($0.modifiers.rawValue) == combo.modifiers
+        }?.label
     }
 
     var body: some View {
@@ -111,24 +150,92 @@ struct SettingsView: View {
             Section("Quick capture") {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Capture shortcut")
-                    HotKeyRecorder(combo: $recordedCombo)
-                        .frame(height: 30)
+                    HStack(spacing: 8) {
+                        HotKeyRecorder(combo: $recordedCombo)
+                            .frame(height: 30)
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showKeyboardPicker.toggle()
+                            }
+                        } label: {
+                            Label(showKeyboardPicker ? "Hide keyboard" : "Keyboard", systemImage: "keyboard")
+                        }
+                        .help("Pick the shortcut from an on-screen keyboard")
+                        Button("Reset") {
+                            recordedCombo = .default
+                        }
+                        .disabled(recordedCombo == .default)
+                        .help("Restore the default ⌘⇧X shortcut")
+                    }
+
+                    // Embedded inline ON PURPOSE: a .sheet attached inside a
+                    // Settings-scene Form silently never presents on several
+                    // macOS versions — the picker would look "added but not
+                    // working". Inline embeds always render.
+                    if showKeyboardPicker {
+                        HotKeyKeyboardPickerView(combo: $recordedCombo, onClose: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showKeyboardPicker = false
+                            }
+                        })
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.primary.opacity(0.04))
+                        )
+                    }
                     Text("Currently \(HotKeyCodec.displayString(currentCombo)) — select text anywhere, then press it.")
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    // TRD 3.2: a global NSEvent monitor doesn't fail loudly
-                    // when another app already owns the combo — it just never
-                    // fires, which looks like a silent bug. This button makes
-                    // the failure visible: press the shortcut immediately
-                    // after; no detection within the window means warn.
+                    // The shortcut can't work at all without Accessibility:
+                    // the global monitors are only installed when trusted.
+                    // Show it here — a missing grant is invisible otherwise.
+                    if !accessibilityTrusted {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Label("Accessibility is off — the capture shortcut isn't listening anywhere.", systemImage: "hand.raised.fill")
+                                .font(.caption.weight(.medium))
+                                .foregroundColor(.red)
+                            if TrustMonitor.grantBelongsToDifferentBuild {
+                                Text(TrustMonitor.rebuiltBinaryExplanation)
+                                    .font(.caption)
+                                    .foregroundColor(.orange)
+                            }
+                            HStack(spacing: 8) {
+                                Button("Open Accessibility Settings") {
+                                    AccessibilityOnboarding.openAccessibilitySettings()
+                                }
+                                Text("After granting, this window updates automatically.")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.red.opacity(0.08)))
+                    }
+
+                    // Guard rail: a combo the system itself uses for text
+                    // editing would fire capture on every copy/paste.
+                    if let collision = reservedCollision {
+                        Label("\(collision) is reserved by macOS for text editing — pick a different combination.", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                    }
+
+                    // TRD 3.2, reworked: the old "press and wait 3s" check
+                    // auto-showed "Not detected" on timeout — blaming the
+                    // combo even when the user simply hadn't pressed it yet.
+                    // Now the system itself is asked who owns the combo
+                    // (RegisterEventHotKey), so a collision verdict is
+                    // instant and provable; the keypress is only a bonus
+                    // end-to-end confirmation.
                     HStack(spacing: 8) {
                         Button {
                             testHotKey()
                         } label: {
-                            Text(isTestingHotKey ? "Press the shortcut now…" : "Test shortcut")
+                            Text(isListeningForPress ? "Press the shortcut now…" : "Test shortcut")
                         }
-                        .disabled(isTestingHotKey)
+                        .disabled(isListeningForPress)
 
                         switch hotKeyTestResult {
                         case .none:
@@ -137,15 +244,101 @@ struct SettingsView: View {
                             Label("Shortcut detected — it works.", systemImage: "checkmark.circle.fill")
                                 .font(.caption)
                                 .foregroundColor(.green)
-                        case .some(.notDetected):
-                            Label("Not detected — this combo may already be in use by another app; try a different one.", systemImage: "exclamationmark.triangle.fill")
+                        case .some(.takenByOtherApp):
+                            Label("Owned by another app — macOS refused registration for this exact combo. Pick a different one.", systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption)
                                 .foregroundColor(.orange)
+
+                            if let report = collisionReport {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(report)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .textSelection(.enabled)
+                                    Button {
+                                        NSPasteboard.general.clearContents()
+                                        NSPasteboard.general.setString(report, forType: .string)
+                                        didCopyCollisionReport = true
+                                    } label: {
+                                        Label(didCopyCollisionReport ? "Copied" : "Copy diagnosis", systemImage: didCopyCollisionReport ? "checkmark" : "doc.on.doc")
+                                            .font(.caption)
+                                    }
+                                }
+                                .padding(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.08)))
+                            }
+                        case .some(.probeFailed(let detail)):
+                            Label("Couldn't verify (\(detail)) — but the combo is not held by another app. Try pressing the shortcut.", systemImage: "questionmark.circle")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        case .some(.notTrusted):
+                            Label("Can't test — Accessibility is off, so the shortcut isn't registered with macOS. Grant it above, then test again.", systemImage: "hand.raised.fill")
+                                .font(.caption)
+                                .foregroundColor(.orange)
+                        }
+                    }
+
+                    // One-click full-pipeline self-check: trust → monitors →
+                    // combo ownership → target eligibility → clipboard →
+                    // backend. Shows exactly where capture is stopped.
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            Button {
+                                let appDelegate = NSApp.delegate as? AppDelegate
+                                pipelineReport = PipelineDiagnostics.run(appDelegate: appDelegate)
+                            } label: {
+                                Label("Run diagnostics", systemImage: "stethoscope")
+                            }
+                            if let report = pipelineReport {
+                                Text(report.summary)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundColor(report.checks.contains { !$0.passed && $0.severity == .fail } ? .orange : .green)
+                            }
+                        }
+                        if let report = pipelineReport {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(report.checks) { check in
+                                    HStack(alignment: .top, spacing: 6) {
+                                        Image(systemName: check.symbol)
+                                            .foregroundColor(check.passed ? .green : (check.severity == .warn ? .orange : .red))
+                                            .font(.caption)
+                                        VStack(alignment: .leading, spacing: 1) {
+                                            Text(check.name)
+                                                .font(.caption.weight(.medium))
+                                            Text(check.detail)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.04)))
                         }
                     }
                 }
 
                 Toggle("Restore clipboard after capture", isOn: $restoreClipboard)
+
+                Toggle(isOn: $copyCaptureTrailOnFailure) {
+                    Text("Copy capture trail on failure")
+                }
+                Text("When a capture finds nothing, the step-by-step diagnostics trail is copied to the clipboard — handy for bug reports.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Picker("Sound on success", selection: $soundOnCaptureSuccess) {
+                    Text("Silent").tag(false)
+                    Text("Play a chime").tag(true)
+                }
+                .pickerStyle(.segmented)
+                Picker("Sound on failure", selection: $soundOnCaptureFailure) {
+                    Text("Silent").tag(false)
+                    Text("Play an alert").tag(true)
+                }
+                .pickerStyle(.segmented)
 
                 Picker("Panel position", selection: $panelPlacementRaw) {
                     Text(PanelPlacement.nearCursor.label).tag(PanelPlacement.nearCursor.rawValue)
@@ -209,10 +402,19 @@ struct SettingsView: View {
             if backendType == .local && availableModels.isEmpty {
                 refreshModels()
             }
+            accessibilityTrusted = AccessibilityOnboarding.isTrusted()
+            if accessibilityTrusted {
+                if let appDelegate = NSApp.delegate as? AppDelegate {
+                    appDelegate.ensureHotKeyMonitors()
+                }
+            } else {
+                startTrustPolling()
+            }
         }
         .onDisappear {
             saveAPIKey()
             stopHotKeyTest()
+            stopTrustPolling()
         }
         .onChange(of: recordedCombo) { combo in
             if let combo {
@@ -220,6 +422,7 @@ struct SettingsView: View {
             }
             // New combo: the previous test verdict no longer applies.
             hotKeyTestResult = nil
+            collisionReport = nil
             stopHotKeyTest()
         }
         .onChange(of: hotKeyRaw) { _ in
@@ -248,47 +451,112 @@ struct SettingsView: View {
     // MARK: - Hotkey collision test (TRD 3.2)
 
     private enum HotKeyTestResult {
+        /// The system confirms no other app holds the combo — the shortcut
+        /// works; a capture press was received during the listen window.
         case detected
-        case notDetected
+        /// RegisterEventHotKey refused: another application provably owns
+        /// this exact combo system-wide.
+        case takenByOtherApp
+        /// RegisterEventHotKey refused for a non-collision reason.
+        case probeFailed(String)
+        /// Trust is missing: the monitors were never installed, so "another
+        /// app owns the combo" would be the wrong diagnosis.
+        case notTrusted
     }
 
     private func testHotKey() {
         stopHotKeyTest()
         hotKeyTestResult = nil
-        isTestingHotKey = true
 
-        let startTime = Date()
-        let center = NotificationCenter.default
+        // Without the Accessibility grant the global monitors were never
+        // installed — pressing the shortcut can't reach us no matter what.
+        // Say that instead of running a test destined to blame "another app".
+        guard accessibilityTrusted else {
+            hotKeyTestResult = .notTrusted
+            return
+        }
 
-        // Reuse the app's existing broadcast: the global hotkey handler fires
-        // it whenever the current combo is detected anywhere in the session.
-        hotKeyTestObserver = center.addObserver(
+        // Make sure the monitors are actually live before judging.
+        if let appDelegate = NSApp.delegate as? AppDelegate {
+            appDelegate.ensureHotKeyMonitors()
+        }
+
+        // Ask the SYSTEM who owns the combo instead of waiting and guessing.
+        // This is instant and deterministic: eventHotKeyExistsErr ⇔ another
+        // app holds this exact combination.
+        switch HotKeyProbe.check(currentCombo) {
+        case .takenByOtherApp:
+            collisionReport = HotKeyCollisionDiagnostics.report(for: currentCombo)
+            hotKeyTestResult = .takenByOtherApp
+            return
+        case .failed(let status):
+            hotKeyTestResult = .probeFailed("system error \(status)")
+            return
+        case .free:
+            collisionReport = nil
+            break
+        }
+
+        // The combo is free. Listen briefly for a genuine keypress so the
+        // user gets positive confirmation end-to-end. Timeouts here are a
+        // NEUTRAL reminder, never an error — the ownership question is
+        // already answered.
+        isListeningForPress = true
+        var observer: NSObjectProtocol?
+        observer = NotificationCenter.default.addObserver(
             forName: .hotKeyDetected, object: nil, queue: .main
         ) { _ in
-            // Ignore the press that armed the test itself (0.2s debounce).
-            guard isTestingHotKey, Date().timeIntervalSince(startTime) >= 0.2 else { return }
-            hotKeyTestResult = .detected
-            isTestingHotKey = false
+            guard self.isListeningForPress else { return }
+            self.hotKeyTestResult = .detected
+            self.isListeningForPress = false
+            if let observer { NotificationCenter.default.removeObserver(observer) }
+            self.hotKeyTestObserver = nil
         }
+        hotKeyTestObserver = observer
 
-        // No detection within the window → likely owned by another app.
-        let timeout = DispatchWorkItem {
-            guard isTestingHotKey else { return }
-            hotKeyTestResult = .notDetected
-            isTestingHotKey = false
+        hotKeyListenTimeout = DispatchWorkItem {
+            guard isListeningForPress else { return }
+            isListeningForPress = false
         }
-        hotKeyTestTimeout = timeout
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3.0, execute: timeout)
+        if let timeout = hotKeyListenTimeout {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 8.0, execute: timeout)
+        }
     }
 
     private func stopHotKeyTest() {
-        isTestingHotKey = false
+        isListeningForPress = false
         if let observer = hotKeyTestObserver {
             NotificationCenter.default.removeObserver(observer)
             hotKeyTestObserver = nil
         }
-        hotKeyTestTimeout?.cancel()
-        hotKeyTestTimeout = nil
+        hotKeyListenTimeout?.cancel()
+        hotKeyListenTimeout = nil
+    }
+
+    // MARK: - Accessibility trust polling
+
+    /// Polls for the grant while Settings is open so the banner clears (and
+    /// the monitors install) the moment the user flips the switch — no
+    /// reopen-required, no relaunch.
+    private func startTrustPolling() {
+        guard trustPollTimer == nil else { return }
+        trustPollTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { timer in
+            guard !AccessibilityOnboarding.isTrusted() else {
+                timer.invalidate()
+                trustPollTimer = nil
+                accessibilityTrusted = true
+                // The monitors were never installed while untrusted; the
+                // AppDelegate listens for this broadcast and installs them
+                // now that the grant has landed.
+                NotificationCenter.default.post(name: .hotKeySettingChanged, object: nil)
+                return
+            }
+        }
+    }
+
+    private func stopTrustPolling() {
+        trustPollTimer?.invalidate()
+        trustPollTimer = nil
     }
 
     // MARK: - Exclusion list (TRD 3.3)

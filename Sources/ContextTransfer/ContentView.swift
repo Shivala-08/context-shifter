@@ -14,6 +14,13 @@ enum SettingsKeys {
     static let panelCorner = "panelCorner"
     /// TRD 3.3: user-added capture exclusion bundle IDs (one per line).
     static let captureExclusions = "captureExclusions"
+    /// Copy the capture diagnostics trail to the clipboard whenever a capture
+    /// fails, so it's immediately pasteable in a bug report.
+    static let copyCaptureTrailOnFailure = "copyCaptureTrailOnFailure"
+    /// Play a sound when a capture+extraction succeeds (default off).
+    static let soundOnCaptureSuccess = "soundOnCaptureSuccess"
+    /// Play a sound when a capture or extraction fails (default on).
+    static let soundOnCaptureFailure = "soundOnCaptureFailure"
     /// Launch-at-login preference (mirror; system SMAppService state wins on
     /// conflict, resolved whenever Settings opens).
     static let launchAtLogin = "launchAtLogin"

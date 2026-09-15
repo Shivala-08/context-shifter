@@ -1,5 +1,14 @@
 .build/
 build/
+DerivedData/
 .DS_Store
 xcuserdata/
 *.xcuserdatad/
+*.xcuserstate
+*.xcresult
+*.swp
+
+# Local env/config that could hold real keys or host paths
+.env
+.env.*
+*.local.plist

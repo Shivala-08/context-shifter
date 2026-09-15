@@ -8,6 +8,9 @@ import AppKit
 final class CaptureOrchestrator: ObservableObject {
     private let captureService = CaptureService()
     private let panelController = FloatingPanelController()
+    /// Remembers the last non-our-app frontmost app, so a capture started
+    /// from our own status-bar menu still knows where the selection lives.
+    private let frontmostTracker = ExternalFrontmostTracker()
 
     /// A capture/extraction cycle is in flight (panel may or may not be showing).
     private var isCapturing = false
@@ -43,21 +46,41 @@ final class CaptureOrchestrator: ObservableObject {
         isCapturing = true
         isDismissedDuringCapture = false
 
-        // TRD 3.3 — FIRST thing after state bookkeeping: if the frontmost app
-        // is excluded (password manager, banking, user list), silently do
-        // nothing. No panel, no error: capturing there could grab a password
-        // field, and popping UI about it would be worse than silence.
-        if let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier,
-           CaptureExclusions.isExcluded(frontmost) {
+        // TRD 3.3 — FIRST thing after state bookkeeping: if the app holding
+        // the selection is excluded (password manager, banking, user list),
+        // silently do nothing. No panel, no error: capturing there could grab
+        // a password field, and popping UI about it would be worse than
+        // silence. Normally that's the frontmost app — but a capture started
+        // from our status-bar menu runs with OUR app frontmost, in which case
+        // the selection lives in the last external frontmost app.
+        var target = NSWorkspace.shared.frontmostApplication
+        if target?.bundleIdentifier == Bundle.main.bundleIdentifier {
+            target = frontmostTracker.lastExternal
+        }
+        guard let targetApp = target,
+              let targetBundleID = targetApp.bundleIdentifier,
+              !CaptureExclusions.isExcluded(targetBundleID)
+        else {
+            // Deliberate silence toward the user (TRD 3.3 — no UI in excluded
+            // apps), but the unified log must still explain the dead hotkey.
+            CaptureLogger.orchestrator.info("hotkey ignored: no eligible target (frontmost=\(target?.bundleIdentifier ?? "nil", privacy: .public), excluded or unknown)")
             isCapturing = false
             return
         }
 
         guard AccessibilityOnboarding.isTrusted() else {
+            if TrustMonitor.grantBelongsToDifferentBuild {
+                CaptureLogger.orchestrator.info("hotkey pressed but Accessibility not granted — \(TrustMonitor.rebuiltBinaryTrailNote, privacy: .public)")
+            } else {
+                CaptureLogger.orchestrator.info("hotkey pressed but Accessibility not granted — prompting onboarding")
+            }
             isCapturing = false
             onNeedsAccessibility?()
             return
         }
+        // First trusted pass (or first after a re-grant): pin this binary's
+        // hash so a later trust loss is explainable.
+        TrustMonitor.recordTrusted()
 
         let placementRaw = UserDefaults.standard.string(forKey: SettingsKeys.panelPlacement)
         let placement = PanelPlacement(rawValue: placementRaw ?? "") ?? .nearCursor
@@ -72,10 +95,10 @@ final class CaptureOrchestrator: ObservableObject {
         )
 
         Task {
-            let outcome = await captureService.captureSelection()
+            let outcome = await captureService.captureSelection(in: targetApp)
 
             guard let text = outcome.text else {
-                self.showFailure("Nothing captured — select some text in the app you're using, then press the shortcut again.")
+                self.handleCaptureFailure(outcome.diagnostics)
                 return
             }
 
@@ -119,18 +142,40 @@ final class CaptureOrchestrator: ObservableObject {
                 state = .needsReview(card: card, warning: warning)
             } else {
                 state = .success(card)
+                CaptureFeedback.playSuccessIfEnabled()
             }
             presentOutcome(state)
             onCaptureSucceeded?()
         } catch {
             _ = ExtractionWarning.shared.consume() // reset for the next run
             restoreClipboard?()
-            presentOutcome(.failure(error.localizedDescription))
+            CaptureFeedback.playFailureIfEnabled()
+            presentOutcome(.failure(error.localizedDescription, diagnostics: ""))
         }
     }
 
-    private func showFailure(_ message: String) {
-        presentOutcome(.failure(message))
+    private func showFailure(_ message: String, diagnostics: String) {
+        presentOutcome(.failure(message, diagnostics: diagnostics))
+    }
+
+    /// Capture came back empty. Optionally copy the diagnostics trail to the
+    /// clipboard (Settings toggle) so it's ready to paste into a bug report —
+    /// safe to write here: on this path the pipeline never took the clipboard
+    /// over, so there's no pending restore to fight with.
+    private func handleCaptureFailure(_ diagnostics: String) {
+        CaptureFeedback.playFailureIfEnabled()
+        let copyTrail = UserDefaults.standard.object(forKey: SettingsKeys.copyCaptureTrailOnFailure) as? Bool ?? false
+        if copyTrail, !diagnostics.isEmpty {
+            let pasteboard = NSPasteboard.general
+            pasteboard.clearContents()
+            pasteboard.setString(diagnostics, forType: .string)
+        }
+        showFailure(
+            copyTrail && !diagnostics.isEmpty
+                ? "Nothing captured — select some text in the app you're using, then press the shortcut again. Trail copied to clipboard."
+                : "Nothing captured — select some text in the app you're using, then press the shortcut again.",
+            diagnostics: diagnostics
+        )
     }
 
     /// Ends the cycle. If the user dismissed the panel meanwhile, the result

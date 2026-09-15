@@ -30,8 +30,6 @@ conversation goes there exactly as written. This is the one section where losing
 precision is worse than losing brevity — a model reading the card later can \
 reconstruct a paraphrased decision, but it cannot reconstruct a dropped or altered \
 link; it will guess, and a guessed link is worse than no link.
-- Prepend a `Captured on: <today's date>` line above `## Goal` so the card carries \
-its own freshness signal.
 - Keep it tight — the card is meant to be pasted as a first message in a new \
 session, not read as a report.
 - Do not add any other sections, headings, or commentary.
@@ -120,6 +118,25 @@ enum ExtractionError: LocalizedError {
 // MARK: - Shared validation retry (Task 4b)
 
 enum ContextCardValidation {
+    /// The capture date is appended CLIENT-SIDE, never requested from the
+    /// model: small local models reliably drop it (observed with llama3.2:3b),
+    /// which failed shape validation, forced a pointless full retry, and
+    /// dumped a good card into "Review before using". A date we stamp
+    /// ourselves is deterministic and free.
+    static func normalizeCard(_ text: String) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.lowercased().contains("captured on:") else { return trimmed }
+        let stamp = Self.cardDateFormatter.string(from: Date())
+        return "Captured on: \(stamp)\n\n\(trimmed)"
+    }
+
+    static let cardDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
     /// Wraps a raw backend call with the Task 4b flow: on a malformed card,
     /// retry once with the corrective instruction appended. Returns the card
     /// plus a warning to surface in the UI when the retry also failed shape.
@@ -127,7 +144,7 @@ enum ContextCardValidation {
         _ raw: @escaping (String) async throws -> String,
         conversation: String
     ) async throws -> (card: String, needsFormatWarning: Bool) {
-        let first = try await raw(conversation)
+        let first = normalizeCard(try await raw(conversation))
         if validateContextCard(first) { return (first, false) }
 
         let retryPrompt = """
@@ -135,7 +152,7 @@ enum ContextCardValidation {
 
         \(cardFormatRetryInstruction)
         """
-        let second = try await raw(retryPrompt)
+        let second = normalizeCard(try await raw(retryPrompt))
         if validateContextCard(second) { return (second, false) }
         return (second, true)
     }

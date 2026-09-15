@@ -11,6 +11,16 @@ struct OllamaBackend: ExtractionBackend {
     /// model just never sees the end of the input, with no error.
     static let numCtx = 8192
 
+    /// Latency: keep the model resident between captures. Without this,
+    /// Ollama unloads after ~5 min idle and the next capture pays the full
+    /// cold-load (seconds on big models). "10m" covers a work session
+    /// without pinning RAM forever.
+    static let keepAlive = "10m"
+
+    /// Latency + cost bound: cards are short. Without a cap, a rambly model
+    /// (or one stuck emitting reasoning) generates until it feels done.
+    static let maxOutputTokens = 1024
+
     /// Task 4: warn before sending when the input plausibly exceeds the
     /// context window (~chars/4 heuristic). Beyond this, input is likely to be
     /// truncated; better the user knows than a silently clipped card.
@@ -93,7 +103,16 @@ struct OllamaBackend: ExtractionBackend {
             "model": model,
             "prompt": prompt,
             "stream": false,
-            "options": ["num_ctx": Self.numCtx],
+            // Keep the model loaded so back-to-back captures skip cold-start.
+            "keep_alive": Self.keepAlive,
+            // Thinking models (qwen3…) default to emitting <think> blocks we
+            // strip anyway — skip generating them at all. Older Ollama
+            // servers ignore this field, so it's safe to always send.
+            "think": false,
+            "options": [
+                "num_ctx": Self.numCtx,
+                "num_predict": Self.maxOutputTokens,
+            ],
         ]
 
         do {
@@ -139,4 +158,45 @@ struct OllamaBackend: ExtractionBackend {
 extension OllamaBackend {
     static let defaultHost = "http://localhost:11434"
     static let defaultModel = "qwen3:8b"
+
+    /// Fires a 1-token generate at launch so the model is loaded into memory
+    /// before the user's first capture — turns the first capture's cold-load
+    /// into a warm call. Silent no-op when Ollama isn't running or the cloud
+    /// backend is configured.
+    static func warmUpInBackground(defaults: UserDefaults = .standard) {
+        let type = BackendType(rawValue: defaults.string(forKey: SettingsKeys.backendType) ?? "") ?? .local
+        if type == .cloud,
+           !(KeychainHelper.load() ?? "").trimmingCharacters(in: .whitespaces).isEmpty {
+            return // cloud configured and usable — no need to load a local model
+        }
+
+        let backend = OllamaBackend(
+            host: defaults.string(forKey: SettingsKeys.ollamaHost) ?? defaultHost,
+            model: defaults.string(forKey: SettingsKeys.ollamaModel) ?? defaultModel
+        )
+
+        Task.detached(priority: .utility) {
+            await backend.warmUp()
+        }
+    }
+
+    /// One minimal generate: loads the model and leaves it resident
+    /// (`keep_alive`). Fails silently — warm-up is best-effort.
+    private func warmUp() async {
+        guard let url = URL(string: "\(Self.normalizedHost(host))/api/generate") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "content-type")
+        request.timeoutInterval = 120 // model load can take a while
+        let body: [String: Any] = [
+            "model": model,
+            "prompt": "",
+            "stream": false,
+            "keep_alive": Self.keepAlive,
+            "options": ["num_predict": 1],
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: body) else { return }
+        request.httpBody = data
+        _ = try? await URLSession.shared.data(for: request)
+    }
 }

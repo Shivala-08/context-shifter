@@ -37,6 +37,12 @@ final class GlobalHotKeyManager {
         startMonitors()
     }
 
+    /// Only the four user-assignable modifiers participate in matching.
+    /// (deviceIndependentFlagsMask also carries .capsLock and .function, so
+    /// comparing against it made the shortcut silently dead whenever Caps
+    /// Lock was on.)
+    private static let hotKeyFlags: NSEvent.ModifierFlags = [.command, .shift, .option, .control]
+
     private func startMonitors() {
         let wanted = combo.modifiers
         let keyCode = combo.keyCode
@@ -44,7 +50,7 @@ final class GlobalHotKeyManager {
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self,
                   event.keyCode == keyCode,
-                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue == wanted
+                  event.modifierFlags.intersection(Self.hotKeyFlags).rawValue == wanted
             else { return }
             self.handler?()
         }
@@ -53,7 +59,7 @@ final class GlobalHotKeyManager {
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self,
                   event.keyCode == keyCode,
-                  event.modifierFlags.intersection(.deviceIndependentFlagsMask).rawValue == wanted
+                  event.modifierFlags.intersection(Self.hotKeyFlags).rawValue == wanted
             else { return event }
             self.handler?()
             return nil // consumed

@@ -63,6 +63,30 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         install(status: status)
     }
 
+    /// Pops the status item's menu open programmatically — the app's only UI
+    /// when its icon is hidden by menu bar overflow, so a Finder double-click
+    /// on an already-running instance still lands somewhere visible.
+    func showMenu() {
+        guard let button = statusItem?.button else { return }
+        // Confirm the icon is actually on a visible screen before relying on
+        // it; if it's parked off-screen (notch overflow), open the menu from
+        // a temporary item that's guaranteed visible instead.
+        let onScreen = NSScreen.screens.contains { $0.frame.contains(button.window?.frame ?? .zero) }
+        if onScreen {
+            button.performClick(nil)
+        } else {
+            let visibleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+            visibleItem.button?.image = NSImage(systemSymbolName: "arrow.left.arrow.right.square", accessibilityDescription: "Context Transfer")
+            visibleItem.menu = statusItem?.menu
+            // Pull the menu down under the (now visible) icon.
+            visibleItem.button?.performClick(nil)
+            // Remove the temporary item once the menu closes.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                NSStatusBar.system.removeStatusItem(visibleItem)
+            }
+        }
+    }
+
     /// TRD 5: briefly swap to a filled/highlighted icon for ~1s so there's
     /// positive confirmation a capture succeeded (easy-to-miss menu bar glyph
     /// otherwise gives zero feedback).

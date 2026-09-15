@@ -37,6 +37,9 @@ struct PanelContentView: View {
     let onClose: () -> Void
 
     @State private var copied = false
+    /// The capture diagnostics trail stays collapsed by default so the
+    /// failure panel stays small; expanded only on demand.
+    @State private var showDiagnostics = false
 
     /// The extracted card, when the state carries one (success or needsReview).
     private var cardText: String? {
@@ -131,11 +134,33 @@ struct PanelContentView: View {
                 }
                 .frame(maxHeight: 260)
 
-            case .failure(let message):
+            case .failure(let message, let diagnostics):
                 Text(message)
                     .font(.caption)
                     .foregroundStyle(.red)
                     .textSelection(.enabled)
+
+                // The capture pipeline's step-by-step trail — which strategy
+                // ran and why each one was rejected. Turns "nothing captured"
+                // from a dead end into a debuggable report. Collapsed by
+                // default so the error stays the visual headline; the trail
+                // is bounded when expanded so it can't blow up the panel.
+                if !diagnostics.isEmpty {
+                    DisclosureGroup(isExpanded: $showDiagnostics) {
+                        ScrollView {
+                            Text(diagnostics)
+                                .font(.system(size: 9, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .frame(maxHeight: 140)
+                    } label: {
+                        Label("Capture trail", systemImage: "list.bullet.rectangle")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
         .padding(12)
@@ -161,7 +186,8 @@ struct PanelContentView: View {
     }
 
     private func backendLabel() -> String {
-        let type = BackendType(rawValue: UserDefaults.standard.string(forKey: SettingsKeys.backendType) ?? "") ?? .cloud
+        // Same fallback as BackendFactory: unknown/missing → local.
+        let type = BackendType(rawValue: UserDefaults.standard.string(forKey: SettingsKeys.backendType) ?? "") ?? .local
         return type.label
     }
 }

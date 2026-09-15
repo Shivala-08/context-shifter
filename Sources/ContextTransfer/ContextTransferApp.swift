@@ -34,7 +34,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let statusController = StatusItemController(
             onOpenSettings: { [weak self] in self?.openSettings() },
             onOpenPasteInWindow: { [weak self] in self?.openPasteInWindow() },
-            onToggleCapture: { [weak self] in self?.orchestrator.triggerCapture() }
+            onToggleCapture: { [weak self] in
+                // Covers the "user granted Accessibility manually in System
+                // Settings" path: the monitors were never installed at launch
+                // (untrusted), and the hotkey can't trigger the onboarding
+                // flow itself. This click installs them without a relaunch.
+                self?.installHotKeyManagerIfTrusted()
+                self?.orchestrator.triggerCapture()
+            }
         )
         statusItemController = statusController
         statusController.install(status: AccessibilityOnboarding.isTrusted() ? .ready : .noAccessibility)
@@ -48,6 +55,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         startHotKeyIfTrusted()
+
+        // Launch trusted? Pin this binary's hash so a later rebuild (different
+        // signature → macOS revokes trust) is diagnosable, not baffling.
+        if AccessibilityOnboarding.isTrusted() {
+            TrustMonitor.recordTrusted()
+        } else if TrustMonitor.grantBelongsToDifferentBuild {
+            CaptureLogger.orchestrator.info("launch untrusted: \(TrustMonitor.rebuiltBinaryTrailNote, privacy: .public)")
+        }
+
+        // Latency: load the local model into memory before the user's first
+        // capture, so cold-start cost lands at launch, not mid-workflow.
+        OllamaBackend.warmUpInBackground()
+    }
+
+    /// A menu-bar agent with LSUIElement has no Dock icon and no window — when
+    /// its status item is hidden (menu bar overflow behind the notch, hidden
+    /// by a menu bar manager, …) the app appears completely absent: double-
+    /// clicking it in Finder does nothing visible. So on a genuine re-launch
+    /// while already running, surface the status item's menu — the app's one
+    /// piece of UI — instead of failing silently.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            statusItemController?.showMenu()
+        }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -61,6 +93,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard AccessibilityOnboarding.isTrusted() else { return }
         installHotKeyManager()
     }
+
+    /// Installs the hotkey monitors when trusted; no-op otherwise. Safe to
+    /// call repeatedly (installHotKeyManager guards against double-install).
+    private func installHotKeyManagerIfTrusted() {
+        guard AccessibilityOnboarding.isTrusted() else { return }
+        installHotKeyManager()
+        statusItemController?.updateStatus(.ready)
+    }
+
+    /// Installs the hotkey monitors if Accessibility trust exists, without
+    /// complaining otherwise. Called before the Settings "Test shortcut"
+    /// check runs and when the Settings trust banner sees the grant arrive:
+    /// if the monitors were never installed (untrusted at launch, or a
+    /// rebuild dropped the grant), the test would report a false "owned by
+    /// another app" verdict. Verifying trust here gives the real answer.
+    func ensureHotKeyMonitors() {
+        installHotKeyManagerIfTrusted()
+    }
+
+    /// True once the global key monitors are installed (requires trust).
+    /// Read by Settings' "Run diagnostics" self-check.
+    var hotKeyMonitorsActive: Bool { hotKeyManager != nil }
 
     private func installHotKeyManager() {
         guard hotKeyManager == nil else { return }
@@ -83,7 +137,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func hotKeySettingChanged() {
-        hotKeyManager?.updateCombo(currentCombo())
+        if hotKeyManager != nil {
+            hotKeyManager?.updateCombo(currentCombo())
+        } else {
+            // Monitors were never installed (untrusted at launch). Try now —
+            // trust may have been granted since launch — so a newly recorded
+            // combo actually becomes live instead of staying dead.
+            installHotKeyManagerIfTrusted()
+        }
     }
 
     /// Runs the onboarding flow; on grant, starts the hotkey monitors.
