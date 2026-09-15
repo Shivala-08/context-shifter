@@ -260,7 +260,7 @@ struct ContentView: View {
             ollamaModel: ollamaModel
         )
 
-        Task {
+        Task { @MainActor in
             do {
                 let card = try await backend.extractContext(from: conversation)
                 // Task 4b: malformed output is shown but flagged, never
