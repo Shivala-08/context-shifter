@@ -6,6 +6,7 @@ A native macOS menu bar app that turns any LLM or app conversation into a portab
 ![Context Transfer demo](docs/demo.gif)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/Shivala-08/context-shifter/actions/workflows/ci.yml/badge.svg)](https://github.com/Shivala-08/context-shifter/actions/workflows/ci.yml)
 [![macOS](https://img.shields.io/badge/macOS-13%2B-lightgrey)](https://www.apple.com/macos/)
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange)](https://swift.org/)
 
