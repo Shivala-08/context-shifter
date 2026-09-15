@@ -42,7 +42,6 @@ struct SettingsView: View {
     // directly whether the combo is free, then we listen for a real press.
     @State private var hotKeyTestResult: HotKeyTestResult?
     @State private var isListeningForPress = false
-    @State private var hotKeyTestObserver: NSObjectProtocol?
     @State private var hotKeyListenTimeout: DispatchWorkItem?
     // Inline collision diagnosis (likely owner apps) for a taken combo.
     @State private var collisionReport: String?
@@ -435,6 +434,11 @@ struct SettingsView: View {
             availableModels = []
             modelListError = nil
         }
+        .onReceive(NotificationCenter.default.publisher(for: .hotKeyDetected)) { _ in
+            guard isListeningForPress else { return }
+            hotKeyTestResult = .detected
+            stopHotKeyTest()
+        }
     }
 
     // MARK: - API key (Keychain-backed)
@@ -503,17 +507,6 @@ struct SettingsView: View {
         // NEUTRAL reminder, never an error — the ownership question is
         // already answered.
         isListeningForPress = true
-        var observer: NSObjectProtocol?
-        observer = NotificationCenter.default.addObserver(
-            forName: .hotKeyDetected, object: nil, queue: .main
-        ) { _ in
-            guard self.isListeningForPress else { return }
-            self.hotKeyTestResult = .detected
-            self.isListeningForPress = false
-            if let observer { NotificationCenter.default.removeObserver(observer) }
-            self.hotKeyTestObserver = nil
-        }
-        hotKeyTestObserver = observer
 
         hotKeyListenTimeout = DispatchWorkItem {
             guard isListeningForPress else { return }
@@ -526,10 +519,6 @@ struct SettingsView: View {
 
     private func stopHotKeyTest() {
         isListeningForPress = false
-        if let observer = hotKeyTestObserver {
-            NotificationCenter.default.removeObserver(observer)
-            hotKeyTestObserver = nil
-        }
         hotKeyListenTimeout?.cancel()
         hotKeyListenTimeout = nil
     }

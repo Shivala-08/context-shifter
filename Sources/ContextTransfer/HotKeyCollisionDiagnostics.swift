@@ -46,7 +46,6 @@ enum HotKeyCollisionDiagnostics {
     /// Builds the report shown in Settings. Never blocks: pure in-memory
     /// scan of NSWorkspace state.
     static func report(for combo: HotKeyCombo) -> String {
-        let comboText = HotKeyCodec.displayString(combo)
         let running = NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular }
             .compactMap { app -> Suspect? in

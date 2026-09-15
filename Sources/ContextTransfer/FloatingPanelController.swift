@@ -61,29 +61,35 @@ final class FloatingPanelController {
     private func installDismissMonitors() {
         guard eventMonitors.isEmpty else { return }
 
-        eventMonitors.append(NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown], handler: { [weak self] event in
             guard let self, let panel = self.panel, panel.isVisible else { return }
             // Ignore clicks on the panel itself (e.g. the Copy button).
             let location = NSEvent.mouseLocation
             if !panel.frame.contains(location) {
                 self.dismiss()
             }
-        })
+        }) {
+            eventMonitors.append(monitor)
+        }
 
-        eventMonitors.append(NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let monitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self, let panel = self.panel, panel.isVisible else { return }
             if event.keyCode == UInt16(kVK_Escape) {
                 self.dismiss()
             }
-        })
+        }) {
+            eventMonitors.append(monitor)
+        }
 
-        eventMonitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        if let monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown, handler: { [weak self] event in
             guard let self, let panel = self.panel, panel.isVisible,
                   event.keyCode == UInt16(kVK_Escape)
             else { return event }
             self.dismiss()
             return nil // consumed
-        })
+        }) {
+            eventMonitors.append(monitor)
+        }
     }
 
     private func removeDismissMonitors() {
