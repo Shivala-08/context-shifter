@@ -464,6 +464,7 @@ struct SettingsView: View {
         case notTrusted
     }
 
+    @MainActor
     private func testHotKey() {
         stopHotKeyTest()
         hotKeyTestResult = nil
