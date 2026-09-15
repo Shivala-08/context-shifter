@@ -124,7 +124,25 @@ enum ContextCardValidation {
     /// dumped a good card into "Review before using". A date we stamp
     /// ourselves is deterministic and free.
     static func normalizeCard(_ text: String) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        // Local models frequently wrap the whole card in a ```markdown fence
+        // even though the prompt forbids it — strip a wrapping fence so the
+        // card starts at "Captured on:"/"## Goal" instead of fence syntax.
+        // Only a leading fence triggers this, so legitimate code blocks
+        // inside the card body are untouched.
+        if trimmed.hasPrefix("```") {
+            if let firstNewline = trimmed.firstIndex(of: "\n") {
+                trimmed = String(trimmed[trimmed.index(after: firstNewline)...])
+            } else {
+                trimmed = ""
+            }
+            if trimmed.hasSuffix("```") {
+                trimmed = String(trimmed[..<trimmed.index(trimmed.endIndex, offsetBy: -3)])
+            }
+            trimmed = trimmed.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+
         guard !trimmed.lowercased().contains("captured on:") else { return trimmed }
         let stamp = Self.cardDateFormatter.string(from: Date())
         return "Captured on: \(stamp)\n\n\(trimmed)"

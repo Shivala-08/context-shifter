@@ -2,8 +2,7 @@
 
 A native macOS menu bar app that turns any LLM or app conversation into a portable context card you can paste into a new session to resume work.
 
-<!-- TODO: record a short capture→panel→copy demo and save it as docs/demo.gif -->
-![Context Transfer demo](docs/demo.gif)
+![Context Transfer screenshot](docs/screenshot.png)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/Shivala-08/context-shifter/actions/workflows/ci.yml/badge.svg)](https://github.com/Shivala-08/context-shifter/actions/workflows/ci.yml)
@@ -46,7 +45,7 @@ open ".build/app/Context Transfer.app"
 
 ### Download a release
 
-Grab the latest signed `.dmg` from [Releases](https://github.com/Shivala-08/context-shifter/releases) — no Xcode required.
+Grab the latest release from [Releases](https://github.com/Shivala-08/context-shifter/releases) — currently source-only (build with the quickstart above); a signed `.dmg` is planned.
 
 ---
 
@@ -64,10 +63,11 @@ Longer-form design docs (PRD, TRD, build manual) live in [docs/](docs/).
 
 ## Backends
 
-| Backend | Privacy | Cost | Setup |
-|---------|---------|------|-------|
-| **Ollama (local)** | 100% local | Free | Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `llama3.2:3b`) |
-| **Anthropic (cloud)** | Sent to `api.anthropic.com` | Pay per token | Add your API key in Settings (stored in Keychain) |
+**Local — Ollama** *(default)* · 100% local, free
+Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `llama3.2:3b`).
+
+**Cloud — Anthropic** · sent to `api.anthropic.com`, pay per token
+Add your API key in Settings (stored in Keychain).
 
 Local is the default. Switch in Settings → Extraction backend.
 

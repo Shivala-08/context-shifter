@@ -2,6 +2,8 @@
 
 Context Transfer is a native macOS menu bar app that turns any LLM or app conversation into a portable context card you can paste into a new session to resume work.
 
+![Context Transfer — the floating context card panel](https://github.com/Shivala-08/context-shifter/releases/download/v0.1.0/screenshot.png)
+
 ## Highlights
 
 - Global capture shortcut (⌘⇧X by default, re-recordable) with built-in hotkey collision check
