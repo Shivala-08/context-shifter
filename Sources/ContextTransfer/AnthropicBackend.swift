@@ -52,10 +52,6 @@ struct AnthropicBackend: ExtractionBackend {
         return try ExtractionResponseParsing.anthropicText(from: data)
     }
 
-    func extractContext(from conversation: String) async throws -> String {
-        try await extractContext(from: conversation, level: .balanced).card
-    }
-
     func extractContext(
         from conversation: String,
         level: CompressionLevel

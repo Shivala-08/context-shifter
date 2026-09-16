@@ -137,11 +137,14 @@ final class CompressionTests: XCTestCase {
     func testProtocolDefaultLevelIsBalanced() async throws {
         // The protocol extension that keeps old call sites compiling must
         // route through Balanced, not silently change with settings.
-        struct TrackedBackend: ExtractionBackend {
-            var receivedLevel: CompressionLevel?
-            var capturedInput: String?
+        final class TrackedBackend: ExtractionBackend {
+            private(set) var receivedLevel: CompressionLevel?
+            private(set) var capturedInput: String?
 
-            func extractContext(from conversation: String, level: CompressionLevel) async throws -> (card: String, stats: CompressionStats) {
+            func extractContext(
+                from conversation: String,
+                level: CompressionLevel
+            ) async throws -> (card: String, stats: CompressionStats) {
                 receivedLevel = level
                 capturedInput = conversation
                 return ("card", CompressionStats(original: conversation, compressed: "card"))

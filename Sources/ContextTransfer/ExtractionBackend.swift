@@ -3,12 +3,8 @@ import Foundation
 /// Common interface for both extraction backends so the rest of the app is
 /// backend-agnostic (cloud Anthropic vs. local Ollama).
 protocol ExtractionBackend {
-    /// Extracts a structured context card (markdown) from a raw conversation.
-    func extractContext(from conversation: String) async throws -> String
-
     /// Extracts a card at the requested compression level and reports how much
-    /// the source shrank. Default implementation wraps `extractContext(from:)`
-    /// so existing conformers keep compiling while adopting levels gradually.
+    /// the source shrank. The one method conformers must implement.
     func extractContext(
         from conversation: String,
         level: CompressionLevel
@@ -16,12 +12,11 @@ protocol ExtractionBackend {
 }
 
 extension ExtractionBackend {
-    func extractContext(
-        from conversation: String,
-        level: CompressionLevel
-    ) async throws -> (card: String, stats: CompressionStats) {
-        let card = try await extractContext(from: conversation)
-        return (card, CompressionStats(originalTokens: CompressionStats.estimateTokens(of: conversation), compressedTokens: CompressionStats.estimateTokens(of: card)))
+    /// Legacy default-level path kept so old call sites compiling against the
+    /// pre-levels signature keep working: routes through Balanced, never the
+    /// user's current setting.
+    func extractContext(from conversation: String) async throws -> String {
+        try await extractContext(from: conversation, level: .balanced).card
     }
 }
 
