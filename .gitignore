@@ -12,3 +12,7 @@ xcuserdata/
 .env
 .env.*
 *.local.plist
+
+# Node / CLI
+node_modules/
+cli/npm-debug.log*

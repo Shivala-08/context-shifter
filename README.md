@@ -25,6 +25,7 @@ A native macOS menu bar app that turns any LLM or app conversation into a portab
 - **Compression levels** — Full / Balanced / Minimal control how much of the conversation survives into the card; the panel reports the reduction (e.g. `18.4k → 2.1k tokens · 89% smaller`)
 - **Launch at login** — toggle in Settings
 - **Zero dependencies** — SwiftUI + AppKit, `URLSession` for all HTTP
+- **Cross-platform CLI companion** — `npx context-transfer` runs the same extraction on any OS with Node 18+ ([cli/README.md](cli/README.md))
 
 ---
 
@@ -83,6 +84,19 @@ Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `ll
 Add your API key in Settings (stored in Keychain).
 
 Local is the default. Switch in Settings → Extraction backend.
+
+---
+
+## CLI companion (Windows / Linux / scripting)
+
+The same extraction as a zero-dependency terminal tool — pipe a conversation in, get the identical context card out:
+
+```bash
+pbpaste | npx context-transfer                 # macOS clipboard → card
+context-transfer --backend anthropic --file notes.txt
+```
+
+Local Ollama by default (no API key needed); Anthropic and NVIDIA NIM via environment variables. Cards produced by either tool are interchangeable — both read the same extraction template from [`prompt/extraction-template.md`](prompt/extraction-template.md). Full usage in [cli/README.md](cli/README.md).
 
 ---
 

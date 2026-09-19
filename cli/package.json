@@ -1,0 +1,45 @@
+{
+  "name": "context-transfer",
+  "version": "0.1.0",
+  "description": "Turn an LLM conversation into a portable context card — CLI companion to the Context Transfer macOS app (Ollama, Anthropic, or NVIDIA NIM).",
+  "license": "MIT",
+  "type": "commonjs",
+  "bin": {
+    "context-transfer": "./bin/context-transfer.js"
+  },
+  "main": "bin/context-transfer.js",
+  "files": [
+    "bin/",
+    "src/"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "llm",
+    "context",
+    "ollama",
+    "anthropic",
+    "nvidia",
+    "nim",
+    "prompt",
+    "conversation",
+    "cli"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Shivala-08/context-shifter.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/Shivala-08/context-shifter/issues"
+  },
+  "homepage": "https://github.com/Shivala-08/context-shifter#readme",
+  "scripts": {
+    "sync-prompt": "node sync-prompt.js",
+    "check-prompt": "node sync-prompt.js --check",
+    "test": "node --test"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
