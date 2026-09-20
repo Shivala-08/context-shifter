@@ -12,6 +12,7 @@
     "dist",
     "prompts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {

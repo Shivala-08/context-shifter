@@ -41,7 +41,9 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      - name: Create the GitHub Release (TRD §14 step 4)
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+      - name: Create the GitHub Release from the changelog section (TRD §14 step 4)
+        run: |
+          node scripts/release-notes.mjs
+          gh release create "$GITHUB_REF_NAME" --notes-file release-notes.md --title "context-shifter ${GITHUB_REF_NAME#cli-}"
         env:
           GH_TOKEN: ${{ github.token }}

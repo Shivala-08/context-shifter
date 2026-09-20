@@ -5,6 +5,9 @@ Cross-platform command-line companion to the [Context Transfer macOS app](../REA
 Zero runtime dependencies. One binary, three backends.
 
 ```bash
+# install it (or skip this and run ad-hoc with npx)
+npm install -g context-shifter
+
 # try it right now, nothing to install
 npx context-shifter --help
 
@@ -20,7 +23,8 @@ Windows PowerShell: `Get-Clipboard | context-shifter extract --copy` · Linux: `
 ## Install
 
 ```bash
-npm install -g context-shifter   # or just use npx context-shifter
+npm install -g context-shifter   # global install → context-shifter + cshift binaries
+npx context-shifter --help       # or run it ad-hoc, nothing installed
 ```
 
 Requires **Node.js 20+** (built-in `fetch` and `util.parseArgs`). The short alias `cshift` is installed alongside `context-shifter`.
