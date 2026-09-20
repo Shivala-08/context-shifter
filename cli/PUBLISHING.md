@@ -53,11 +53,23 @@ name. Every later release goes through CI.
       npx context-shifter@latest --version    # → context-shifter 0.1.0 (card spec 1)
       ```
 - [ ] **5. Attach the trusted publisher** on npmjs.com → package →
-      **Settings → Trusted Publisher → GitHub Actions**:
-      - Repository owner/name: `Shivala-08/context-shifter`
+      **Settings → Trusted Publisher → GitHub Actions**. The form has
+      **separate fields** for owner and repo (pasting the combined slug into
+      either fails with "Organization or user is required"):
+      - Organization or user: `Shivala-08`
+      - Repository: `context-shifter`
       - Workflow filename: `cli-release.yml`
       - Environment name: `npm` (optional on npm's side, but the workflow
         declares `environment: npm`, so keep them identical)
+      - **Allowed actions: tick the direct-`npm publish` option.** Since
+        2026-09-03 npm defaults new publishers to `npm stage publish` only;
+        leaving the default makes CI's direct publish fail with
+        `403 … OIDC permission denied for this action`. Only skip this if you
+        deliberately run the release in `stage` mode (see below).
+      - Note the form's owner and repo are **separate fields** (pasting the
+        combined slug into either fails with "Organization or user is
+        required"), and existing connections cannot be edited — to change
+        anything, delete and re-create the entry.
 - [ ] **6. (Optional) Choose a publish mode.** Repo variable
       `NPM_PUBLISH_MODE` (Settings → Secrets and variables → Actions →
       Variables): `publish` (default) publishes directly; `stage` holds the
@@ -135,6 +147,8 @@ Until approved, the version is not public.
 | Workflow fails at "Assert the tag matches" | Tag ≠ `package.json` version. Re-tag correctly (`git tag -d`, re-create); never edit a pushed tag's commit. |
 | `release-notes: no CHANGELOG.md section for X.Y.Z` | Changelog section missing or heading malformed — must be `## [X.Y.Z]` with the exact version. |
 | Publish 403 | Trusted publisher not attached, workflow filename/environment mismatch, or the version already exists (the workflow skips existing versions — a 403 on a *new* version means setup). |
+| Publish 403 `OIDC permission denied for this action` | The run matched the trusted publisher but "Allowed actions" excludes direct `npm publish` (npm's post-2026-09-03 default is stage-only). Tick the direct-publish allowed action — delete/re-create the entry if it can't be edited. |
+| Publish 404 on PUT (`Not found`) with provenance signed | The registry never matched the run to the trusted publisher (auth never happened). Check the npm Trusted Publisher fields (owner and repo are **separate fields** — see bootstrap step 5), then delete and re-create the entry; a config created right after the manual bootstrap publish can silently fail to match even when it looks correct. |
 | npm rejects the name at bootstrap | Name too similar to an existing package. Pick an alternative and update `package.json` (`name`, `bin`), README, and the landing page together. |
 | CI red on one OS | Don't tag. Fix and re-push `main`; the tag triggers a fresh full run anyway. |
 
