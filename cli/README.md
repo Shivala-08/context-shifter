@@ -145,7 +145,10 @@ cd cli
 npm test              # unit tests (node:test, zero dev deps)
 npm run sync-prompt   # regenerate src/prompt.js from /prompt/extraction-template.md
 npm run check-prompt  # verify no drift (runs in CI)
+../Scripts/card-parity.sh [model] [host]   # structural parity vs the Mac app (needs local Ollama)
 ```
+
+> **Model tip:** tiny local models (e.g. `llama3.2:3b`) are fast but unreliable for extraction — they drop sections (triggering the ⚠️ warning path) and tend to **hallucinate URLs** in Resources & Links. Prefer ~8B+ models like the default `qwen3:8b`, and always sanity-check links from sub-8B models.
 
 ## License
 

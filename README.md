@@ -80,6 +80,8 @@ Longer-form design docs (PRD, TRD, build manual) live in [docs/](docs/).
 **Local — Ollama** *(default)* · 100% local, free
 Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `llama3.2:3b`).
 
+> **Model tip:** stick to ~8B models and up (the default is `qwen3:8b`). Tiny models like `llama3.2:3b` are fast but unreliable here — they tend to drop sections, trigger the "review before using" warning, and **invent plausible-looking URLs** in Resources & Links, which is the one section where fabrication is worse than omission. Always sanity-check the links on any card from a sub-8B model.
+
 **Cloud — Anthropic** · sent to `api.anthropic.com`, pay per token
 Add your API key in Settings (stored in Keychain).
 
