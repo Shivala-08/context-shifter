@@ -35,6 +35,7 @@ Requires **Node.js 20+** (built-in `fetch` and `util.parseArgs`). The short alia
 context-shifter extract [file|-] [options]
 context-shifter doctor
 context-shifter models
+context-shifter config list|get|set|path
 ```
 
 - **stdout is the card, nothing else.** Stats, warnings and progress go to stderr, so `| pbcopy` and `> card.md` stay clean.
@@ -60,7 +61,7 @@ context-shifter doctor
 | `--model <name>` | per backend | Model override |
 | `--host <url>` | `OLLAMA_HOST` or `http://127.0.0.1:11434` | Ollama host override |
 | `--level <name>` | `balanced` | `full` · `balanced` · `minimal` — same semantics as the Mac app |
-| `--copy` | off | Also copy the card to the clipboard (pbcopy / Set-Clipboard / wl-copy / xclip) |
+| `--copy` | off | Also copy the card to the clipboard (pbcopy / Set-Clipboard / wl-copy / xclip / xsel) |
 | `--out <file>` | stdout | Also write the card to a file |
 | `--offline` | off | Refuse any non-loopback backend — guarantees zero network calls |
 | `--ctx <tokens>` | `8192` | Raise the Ollama context window — scales the chunk budget |
