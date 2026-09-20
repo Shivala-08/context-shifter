@@ -34,11 +34,19 @@ name. Every later release goes through CI.
       ```
 - [ ] **3. Publish v0.1.0 manually to reserve the name.**
       ```bash
-      npm publish              # from cli/ — prepack auto-runs sync-prompt + build
+      npm publish --no-provenance --otp=XXXXXX   # from cli/; prepack auto-runs sync-prompt + build
       ```
-      Do **not** add `--provenance` here: provenance requires OIDC, which only
-      exists on GitHub Actions. The bootstrap version simply ships without a
-      provenance badge; every CI-published version after it has one.
+      Both flags matter for the manual publish:
+      - `--no-provenance` — `package.json` sets `publishConfig.provenance: true`,
+        but provenance requires GitHub Actions' OIDC and fails locally with
+        `EUSAGE: Automatic provenance generation not supported for provider: null`.
+        The bootstrap version simply ships without a provenance badge; every
+        CI-published version after it has one.
+      - `--otp=XXXXXX` — npm requires a 2FA code to publish. Run this in a
+        terminal where you can read your authenticator app and paste the code
+        within its ~30 s window. Without it npm answers
+        `403 … Two-factor authentication … required to publish packages`.
+      Success looks like `+ context-shifter@0.1.0` — verify before moving on.
 - [ ] **4. Verify the reservation.**
       ```bash
       npm view context-shifter version        # → 0.1.0
