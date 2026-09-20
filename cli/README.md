@@ -2,7 +2,7 @@
 
 Cross-platform command-line companion to the [Context Transfer macOS app](../README.md). Pipe a conversation in, get a structured **context card** out — same template, same sections, same card shape as the Mac app, on any OS with Node 20+.
 
-Zero runtime dependencies. One binary, three backends.
+Zero runtime dependencies. One binary, five backends.
 
 ```bash
 # install it (or skip this and run ad-hoc with npx)
@@ -56,7 +56,7 @@ context-shifter doctor
 
 | Flag | Default | Description |
 |---|---|---|
-| `--backend <name>` | `ollama` | `ollama` · `anthropic` · `nim` |
+| `--backend <name>` | `ollama` | `ollama` · `anthropic` · `nim` · `openai` · `openrouter` |
 | `--model <name>` | per backend | Model override |
 | `--host <url>` | `OLLAMA_HOST` or `http://127.0.0.1:11434` | Ollama host override |
 | `--level <name>` | `balanced` | `full` · `balanced` · `minimal` — same semantics as the Mac app |
@@ -83,6 +83,8 @@ context-shifter doctor
 | `ANTHROPIC_API_KEY` | Anthropic backend |
 | `NVIDIA_API_KEY` | NVIDIA NIM backend (`NVIDIA_NIM_API_KEY` accepted) |
 | `NIM_BASE_URL` | NIM endpoint override (default `https://integrate.api.nvidia.com/v1`) |
+| `OPENAI_API_KEY` | OpenAI backend |
+| `OPENROUTER_API_KEY` | OpenRouter backend |
 | `CONTEXT_SHIFTER_BACKEND` / `_MODEL` / `_LEVEL` | Defaults when flags are absent |
 | `NO_COLOR` | Colour suppression (output is already plain) |
 
@@ -140,7 +142,7 @@ context-shifter config set level minimal       # save a default
 context-shifter config path                    # where the file lives
 ```
 
-Keys: `backend`, `model`, `level`. Precedence: **flags > environment > config file > built-in defaults**. API keys are env-only by design and are refused here.
+Keys: `backend`, `model`, `level`. Precedence: **flags > environment > config file > built-in defaults**. API keys are env-only by design and are refused here. The file lives at `$XDG_CONFIG_HOME/context-shifter/config.json` (fallback `~/.config/…`) on macOS/Linux and `%APPDATA%\context-shifter\config.json` on Windows — `config path` prints it.
 
 ### Long conversations: chunk + merge
 
@@ -187,7 +189,7 @@ npm run check-prompt  # verify no drift (runs in CI)
 npm pack --dry-run    # inspect the publishable tarball
 ```
 
-Releasing: see [PUBLISHING.md](PUBLISHING.md) — one-time npm bootstrap plus the per-release tag checklist.
+Releasing: see [PUBLISHING.md](PUBLISHING.md) — releases after the one-time bootstrap publish from `cli-v*` tags via CI with npm provenance (OIDC trusted publishing), so every npm page shows where the artifact was built.
 
 > **Model tip:** tiny local models (e.g. `llama3.2:3b`) are fast but unreliable for extraction — they drop sections (triggering the ⚠️ warning path) and tend to **hallucinate URLs** in Resources & Links. Prefer ~8B+ models like the default `qwen3:8b`, and always sanity-check links from sub-8B models.
 

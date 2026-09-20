@@ -10,6 +10,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-20
+
+First release shipped through CI with npm **provenance** (OIDC trusted
+publishing) — the bootstrap reserved the name with a manual 0.1.0 publish, as
+planned in [PUBLISHING.md](PUBLISHING.md). No functional changes to extraction.
+
+### Fixed
+
+- **Windows CI green** — runners check out with `core.autocrlf=true`, so the
+  shared extraction prompt arrived as CRLF and both front-matter parsers
+  (hard-coded to LF) rejected it. `.gitattributes` now enforces LF repo-wide
+  (the prompt's sha256 drift contract must be OS-independent), the parsers
+  normalize CRLF as defence in depth, and `parsePromptFile` is pinned by CRLF
+  regression tests.
+- **Config-path tests pass on Windows** — `configBaseDir`/`configFilePath`
+  take an injectable `platform` so the `%APPDATA%` branch is testable from any
+  OS; the suite no longer depends on which platform it runs on.
+
 ## [0.1.0] - 2026-09-20
 
 First release. Turns a pasted or piped AI conversation into a portable context
@@ -93,3 +111,4 @@ Transfer macOS app, on Windows, Linux and macOS. Zero runtime dependencies.
   `@types/node` at build time, nothing at runtime.
 
 [0.1.0]: https://github.com/Shivala-08/context-shifter/releases/tag/cli-v0.1.0
+[0.1.1]: https://github.com/Shivala-08/context-shifter/releases/tag/cli-v0.1.1

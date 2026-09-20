@@ -1,6 +1,6 @@
 {
   "name": "context-shifter",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "Turn any AI conversation into a portable context card. Local-first via Ollama. CLI companion to the Context Transfer macOS app.",
   "license": "MIT",
