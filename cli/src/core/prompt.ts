@@ -30,7 +30,11 @@ interface ParsedPrompt {
 
 let cached: ParsedPrompt | undefined;
 
-function parsePromptFile(text: string): ParsedPrompt {
+/** Pure parser — exported for the CRLF-regression test (test/prompt-crlf.test.ts). */
+export function parsePromptFile(rawText: string): ParsedPrompt {
+  // CRLF-immune: Windows checkouts (core.autocrlf) and Windows editors can
+  // put \r\n in the file; the front-matter regex and block bodies expect LF.
+  const text = rawText.replace(/\r\n/g, '\n');
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
   const fmBody = fm?.[1];
   if (fmBody === undefined) throw new Error('Extraction prompt has no YAML front matter.');

@@ -1,0 +1,5 @@
+# LF everywhere — keeps shared/extraction-prompt.md byte-identical across
+# OSes (its sha256 is the prompt-drift contract) and keeps parsers
+# CRLF-immune. Windows contributors check out LF too; nothing in this repo
+# needs CRLF.
+* text=auto eol=lf

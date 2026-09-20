@@ -35,7 +35,7 @@ function readCanonical() {
     fail(`shared/extraction-prompt.md not found at ${SHARED_PROMPT} — the CLI cannot be built without the canonical prompt.`);
   }
 
-  const text = bytes.toString('utf8');
+  const text = bytes.toString('utf8').replace(/\r\n/g, '\n'); // CRLF-immune (Windows checkouts)
   const fm = /^---\n([\s\S]*?)\n---\n/.exec(text);
   if (!fm) fail('shared/extraction-prompt.md has no YAML front matter (expected ---\\nspec_version: 1\\n---).');
 
