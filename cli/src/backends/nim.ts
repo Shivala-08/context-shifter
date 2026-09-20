@@ -40,6 +40,7 @@ export function createNimBackend(options: BackendOptions = {}): Backend {
 
   return {
     id: 'nim',
+    model,
     isLocal: false,
     contextWindowTokens: INPUT_BUDGET_TOKENS,
     destination: new URL(baseUrl).host,

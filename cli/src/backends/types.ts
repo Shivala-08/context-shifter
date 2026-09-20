@@ -23,6 +23,8 @@ export interface CompletionResult {
 
 export interface Backend {
   readonly id: BackendId;
+  /** Resolved model id (flag > env > per-backend default) — surfaced by --json and doctor. */
+  readonly model: string;
   /** Loopback host only — drives --offline (TRD §7.4). */
   readonly isLocal: boolean;
   /** Model-context size in tokens; the pipeline derives the input budget. */

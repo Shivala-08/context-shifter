@@ -66,6 +66,9 @@ context-shifter doctor
 | `--ctx <tokens>` | `8192` | Raise the Ollama context window — scales the chunk budget |
 | `--max-input <bytes>` | `10485760` | Input size guard |
 | `--quiet` | off | Suppress stats/progress on stderr |
+| `--json` | off | Emit a structured object (sections as arrays, stats, backend, model, `spec_version`) to stdout instead of the markdown card |
+| `--redact` | off | Scrub obvious secrets (`[REDACTED:type]`) from the input before sending |
+| `--from <format>` | plain text | Parse an official export first: `chatgpt-export` \| `claude-export` |
 | `--no-color` | auto | Accepted for portability; output is plain text either way |
 | `--extract` | — | Compat alias for `extract` (the landing page's spelling) |
 | `--help`, `-h` / `--version`, `-v` | | |
@@ -102,6 +105,40 @@ pbpaste | context-shifter extract
 ```
 
 When a cloud backend is used, one line on stderr names the destination host before anything is sent.
+
+### Chat exports: `--from`
+
+Convert an official data export instead of a raw paste — the newest conversation in the file is used and the rest are skipped with a note:
+
+```bash
+context-shifter extract conversations.json --from chatgpt-export --copy
+context-shifter extract conversations.json --from claude-export
+```
+
+Both expect the `conversations.json` file from the platform's "Export data" archive. Export formats change; malformed input is a usage error with a hint, never a crash.
+
+### Secret redaction: `--redact`
+
+`--redact` replaces obvious secrets with `[REDACTED:type]` before anything is sent — API keys (`sk-ant-…`, `sk-…`, `nvapi-…`), GitHub/Slack tokens, AWS access keys, JWTs, `Bearer` headers and PEM private-key blocks. Without `--redact`, a cloud backend that detects potential secrets warns on stderr but still runs; local backends stay silent. Link fidelity checks the redacted text, so redaction can't cause false validation failures.
+
+### Structured output: `--json`
+
+`--json` swaps the markdown card on stdout for one JSON object — the full card, sections as line arrays, token stats, backend, model, level, `spec_version`, validation verdict and any redaction report. `--out` and `--copy` keep operating on the markdown card.
+
+```bash
+pbpaste | context-shifter extract --json | jq '.sections["Key Decisions"]'
+```
+
+### Saved defaults: `config`
+
+```bash
+context-shifter config list                    # show all keys
+context-shifter config get backend             # one value
+context-shifter config set level minimal       # save a default
+context-shifter config path                    # where the file lives
+```
+
+Keys: `backend`, `model`, `level`. Precedence: **flags > environment > config file > built-in defaults**. API keys are env-only by design and are refused here.
 
 ### Long conversations: chunk + merge
 

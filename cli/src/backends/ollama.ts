@@ -53,6 +53,7 @@ export function createOllamaBackend(options: BackendOptions = {}): Backend {
 
   return {
     id: 'ollama',
+    model,
     isLocal: isLoopbackHost(host),
     contextWindowTokens: numCtx,
     destination: host,

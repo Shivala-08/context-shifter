@@ -8,6 +8,29 @@ card format is a separate shared contract (`CARD_SPEC_VERSION`) documented in
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`--json`** (R17) — structured output to stdout: the full card, sections as
+  line arrays, token stats, backend, model, level, `spec_version`, the
+  validation verdict and any redaction report. `--out`/`--copy` still operate
+  on the markdown card.
+- **`--redact`** (R18) — scrubs obvious secrets before anything is sent:
+  Anthropic/generic API keys, NVIDIA keys, GitHub and Slack tokens, AWS access
+  key IDs, JWTs, `Bearer` headers, PEM private-key blocks — each replaced with
+  `[REDACTED:type]`. On cloud backends without `--redact`, detected secrets
+  produce a stderr warning; local backends stay silent. Link fidelity checks
+  the redacted text so redaction can't cause false validation failures.
+- **`--from chatgpt-export\|claude-export`** (R19) — parses the official
+  `conversations.json` data exports into a transcript first. The most recently
+  updated conversation in an array is converted (with a note); malformed
+  input is a usage error with a hint.
+- **`config list\|get\|set\|path`** (R23) — non-secret defaults
+  (`backend`/`model`/`level`) stored at the platform config location.
+  Precedence: flags > environment > config file > built-in defaults. API keys
+  remain env-only and are refused as config keys.
+
 ## [0.1.0] - 2026-09-20
 
 First release. Turns a pasted or piped AI conversation into a portable context

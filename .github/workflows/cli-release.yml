@@ -5,12 +5,15 @@ on:
     tags: ['cli-v*']
 
 permissions:
-  id-token: write   # npm provenance (TRD §14)
+  id-token: write   # OIDC trusted publishing (TRD §14) — no NPM_TOKEN secret
   contents: write   # GitHub Release
 
 jobs:
   publish:
     runs-on: ubuntu-latest
+    # Must match the "Environment name" field of the trusted publisher
+    # configured on npmjs.com (optional there, but recommended).
+    environment: npm
     defaults:
       run:
         working-directory: cli
@@ -18,7 +21,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          # OIDC trusted publishing needs Node >= 22.14; 24 is in the tested
+          # CI matrix. The npm floor (>= 11.5.1) is enforced two steps down.
+          node-version: 24
           registry-url: 'https://registry.npmjs.org/'
 
       - name: Assert the tag matches cli/package.json version (TRD §14 step 1)
@@ -36,10 +41,39 @@ jobs:
       - name: Test
         run: npm test
 
-      - name: Publish to npm with provenance (TRD §14 step 3)
-        run: npm publish --provenance
+      - name: Ensure npm supports OIDC trusted publishing and staged publishing
+        # Trusted publishing needs npm >= 11.5.1; `npm stage publish` needs
+        # >= 11.15.0. Installing latest covers both floors on any image.
+        run: npm install -g npm@latest
+
+      - name: Publish to npm via OIDC trusted publishing (TRD §14 step 3)
+        # Mode comes from the NPM_PUBLISH_MODE repo variable (Settings →
+        # Secrets and variables → Actions → Variables); default "publish".
+        #   publish — direct publish; requires "npm publish" in the trusted
+        #             publisher's allowed actions on npmjs.com.
+        #   stage   — review-before-publish: the version goes to npm's
+        #             staging area and a maintainer must approve it with 2FA
+        #             (`npm stage approve <stage-id>`, or the Staged Packages
+        #             tab on npmjs.com) before it goes live. CI cannot approve
+        #             — stage list/view/approve need interactive auth.
+        # Bootstrap: npm only lets you attach a trusted publisher to a
+        # package that already exists, so the first version may have been
+        # published manually to reserve the name. Skip the (impossible)
+        # re-publish in that case; the GitHub Release below still runs.
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_PUBLISH_MODE: ${{ vars.NPM_PUBLISH_MODE || 'publish' }}
+        run: |
+          PKG="context-shifter@${GITHUB_REF_NAME#cli-}"
+          if npm view "$PKG" version > /dev/null 2>&1; then
+            echo "$PKG is already on npm — skipping publish (name-reservation bootstrap)."
+          elif [ "$NPM_PUBLISH_MODE" = "stage" ]; then
+            npm stage publish
+            echo '### npm publish is staged — not live yet' >> "$GITHUB_STEP_SUMMARY"
+            echo '' >> "$GITHUB_STEP_SUMMARY"
+            echo 'Review and approve with 2FA: `npm stage list context-shifter` then `npm stage approve <stage-id>`, or the Staged Packages tab on npmjs.com.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            npm publish --provenance
+          fi
 
       - name: Create the GitHub Release from the changelog section (TRD §14 step 4)
         run: |

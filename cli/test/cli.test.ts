@@ -54,8 +54,10 @@ test('--capture is refused with exit 2 (macOS-only, PRD F1)', () => {
   parseExpectError(['--capture'], EXIT.USAGE);
 });
 
-test('config command is refused with exit 2 until v0.2 (PRD R23)', () => {
-  parseExpectError(['config', 'get'], EXIT.USAGE);
+test('config command routes with its subcommand args (PRD R23)', () => {
+  const parsed = parseArgsTo(['config', 'set', 'level', 'minimal']);
+  assert.equal(parsed.command, 'config');
+  assert.deepEqual(parsed.configArgs, ['set', 'level', 'minimal']);
 });
 
 test('unknown flags are usage errors (strict parseArgs)', () => {
@@ -114,6 +116,39 @@ test('output flags parse', () => {
   assert.equal(parsed.copy, true);
   assert.equal(parsed.quiet, true);
   assert.equal(parsed.offline, true);
+});
+
+test('--json, --redact and --from parse (PRD R17/R18/R19)', () => {
+  const parsed = parseArgsTo(['--json', '--redact', '--from', 'chatgpt-export', 'export.json']);
+  assert.equal(parsed.json, true);
+  assert.equal(parsed.redact, true);
+  assert.equal(parsed.from, 'chatgpt-export');
+  assert.equal(parsed.file, 'export.json');
+  assert.equal(parseArgsTo([]).json, false);
+  assert.equal(parseArgsTo([]).redact, false);
+  assert.equal(parseArgsTo([]).from, undefined);
+  assert.equal(parseArgsTo(['--from', 'claude-export']).from, 'claude-export');
+});
+
+test('invalid --from is a usage error naming the valid formats', () => {
+  const err = parseExpectError(['--from', 'slack-export'], EXIT.USAGE);
+  assert.ok(err.hint?.includes('chatgpt-export'));
+});
+
+test('config-file defaults fill gaps; flag beats env beats file (TRD §4.3)', () => {
+  process.env.CONTEXT_SHIFTER_LEVEL = 'minimal';
+  try {
+    const fileConfig = { backend: 'anthropic', model: 'claude-sonnet-4-6', level: 'full' };
+    const parsed = parseArgsTo([], fileConfig);
+    assert.equal(parsed.backend, 'anthropic');
+    assert.equal(parsed.model, 'claude-sonnet-4-6');
+    assert.equal(parsed.level, 'minimal'); // env beats file
+    assert.equal(parseArgsTo(['--level', 'balanced'], fileConfig).level, 'balanced'); // flag beats env
+    assert.equal(parseArgsTo(['--backend', 'nim'], fileConfig).backend, 'nim'); // flag beats file
+    assert.equal(parseArgsTo([]).level, 'minimal'); // no file: env still applies
+  } finally {
+    delete process.env.CONTEXT_SHIFTER_LEVEL;
+  }
 });
 
 test('--version, -v, --help, -h map to their commands', () => {

@@ -34,6 +34,7 @@ export function createAnthropicBackend(options: BackendOptions = {}): Backend {
 
   return {
     id: 'anthropic',
+    model,
     isLocal: false,
     contextWindowTokens: INPUT_BUDGET_TOKENS,
     destination: 'api.anthropic.com',

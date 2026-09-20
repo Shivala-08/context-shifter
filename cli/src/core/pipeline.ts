@@ -40,6 +40,8 @@ export interface PipelineResult {
   problems: ValidationProblem[];
   warnings: string[];
   statsLine: string;
+  /** Chars/4 estimate of the (post-redaction) input — surfaced by --json. */
+  originalTokens: number;
   usage?: { inputTokens: number; outputTokens: number };
   chunked: boolean;
   chunks: number;
@@ -186,6 +188,7 @@ export async function runExtraction(opts: PipelineOptions): Promise<PipelineResu
     problems: verdict.problems,
     warnings,
     statsLine,
+    originalTokens: estimateTokens(input),
     usage,
     chunked,
     chunks: chunkCount,

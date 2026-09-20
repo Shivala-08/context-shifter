@@ -32,6 +32,7 @@ export function fakeBackend(overrides: Partial<Backend> = {}, responses: Array<(
   let i = 0;
   const base: Backend = {
     id: 'ollama',
+    model: 'test-model',
     isLocal: true,
     contextWindowTokens: 8192,
     destination: 'http://127.0.0.1:11434',
