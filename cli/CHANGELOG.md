@@ -10,35 +10,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
-
-- **`--backend openai` and `--backend openrouter`** — two new cloud presets on
-  a shared OpenAI-compatible client (the NIM backend is now the third preset
-  of the same layer; its behaviour is unchanged). Keys: `OPENAI_API_KEY`,
-  `OPENROUTER_API_KEY` (env-only, as always). OpenRouter unlocks hundreds of
-  models via `vendor/model` ids with one key. Newer OpenAI reasoning models
-  that reject `max_tokens` are handled by an automatic
-  `max_completion_tokens` retry. Defaults: `gpt-4o-mini` (OpenAI),
-  `openai/gpt-4o-mini` (OpenRouter); override with `--model`.
-- **`--json`** (R17) — structured output to stdout: the full card, sections as
-  line arrays, token stats, backend, model, level, `spec_version`, the
-  validation verdict and any redaction report. `--out`/`--copy` still operate
-  on the markdown card.
-- **`--redact`** (R18) — scrubs obvious secrets before anything is sent:
-  Anthropic/generic API keys, NVIDIA keys, GitHub and Slack tokens, AWS access
-  key IDs, JWTs, `Bearer` headers, PEM private-key blocks — each replaced with
-  `[REDACTED:type]`. On cloud backends without `--redact`, detected secrets
-  produce a stderr warning; local backends stay silent. Link fidelity checks
-  the redacted text so redaction can't cause false validation failures.
-- **`--from chatgpt-export\|claude-export`** (R19) — parses the official
-  `conversations.json` data exports into a transcript first. The most recently
-  updated conversation in an array is converted (with a note); malformed
-  input is a usage error with a hint.
-- **`config list\|get\|set\|path`** (R23) — non-secret defaults
-  (`backend`/`model`/`level`) stored at the platform config location.
-  Precedence: flags > environment > config file > built-in defaults. API keys
-  remain env-only and are refused as config keys.
-
 ## [0.1.0] - 2026-09-20
 
 First release. Turns a pasted or piped AI conversation into a portable context
@@ -51,11 +22,16 @@ Transfer macOS app, on Windows, Linux and macOS. Zero runtime dependencies.
   interactive TTY gets a paste prompt with the OS-correct EOF key
   (`Ctrl-D`, or `Ctrl-Z` then Enter on Windows). Empty input and oversize
   input (10 MB guard, `--max-input`) are usage errors.
-- **Three backends** — `ollama` (default, local & free), `anthropic`,
-  `nim` (NVIDIA NIM, OpenAI-compatible). Default models: `qwen3:8b`,
-  `claude-sonnet-4-6`, `meta/llama-3.1-8b-instruct`; override with `--model`.
-  Ollama's context window is always set explicitly (`num_ctx`, `--ctx`) so long
-  prompts are never silently truncated.
+- **Five backends** — `ollama` (default, local & free), `anthropic`,
+  `nim` (NVIDIA NIM), plus `openai` and `openrouter` presets on the same
+  OpenAI-compatible client layer. Default models: `qwen3:8b`,
+  `claude-sonnet-4-6`, `meta/llama-3.1-8b-instruct`, `gpt-4o-mini` (OpenAI),
+  `openai/gpt-4o-mini` (OpenRouter); override with `--model`. OpenRouter
+  unlocks hundreds of models via `vendor/model` ids with one key; newer
+  OpenAI reasoning models that reject `max_tokens` get an automatic
+  `max_completion_tokens` retry. Ollama's context window is always set
+  explicitly (`num_ctx`, `--ctx`) so long prompts are never silently
+  truncated.
 - **Compression levels** `--level full|balanced|minimal` (default
   `balanced`) with the same semantics as the Mac app.
 - **Card validation + one retry** against the shared card spec: all six
@@ -70,6 +46,20 @@ Transfer macOS app, on Windows, Linux and macOS. Zero runtime dependencies.
 - **Output & integration** — `--copy` (pbcopy / Set-Clipboard / wl-copy /
   xclip / xsel, no dependency), `--out <file>`, `--quiet`. stdout carries the
   card only; stats, warnings and progress go to stderr.
+- **`--json`** (R17) — structured output to stdout: the full card, sections as
+  line arrays, token stats, backend, model, level, `spec_version`, the
+  validation verdict and any redaction report. `--out`/`--copy` still operate
+  on the markdown card.
+- **`--redact`** (R18) — scrubs obvious secrets before anything is sent:
+  Anthropic/generic API keys, NVIDIA keys, GitHub and Slack tokens, AWS access
+  key IDs, JWTs, `Bearer` headers, PEM private-key blocks — each replaced with
+  `[REDACTED:type]`. On cloud backends without `--redact`, detected secrets
+  produce a stderr warning; local backends stay silent. Link fidelity checks
+  the redacted text so redaction can't cause false validation failures.
+- **`--from chatgpt-export\|claude-export`** (R19) — parses the official
+  `conversations.json` data exports into a transcript first. The most recently
+  updated conversation in an array is converted (with a note); malformed
+  input is a usage error with a hint.
 - **Token-reduction stats** on stderr (`18.4k → 2.1k tokens · 89% smaller`)
   using real API usage when reported, else the ~4 chars/token heuristic.
 - **`--offline`** — refuses any non-loopback backend before any network I/O,
@@ -77,6 +67,10 @@ Transfer macOS app, on Windows, Linux and macOS. Zero runtime dependencies.
 - **`doctor`** — Node version, Ollama reachability, model pulled (with a
   small-model warning below 8B), cloud keys, clipboard tool.
 - **`models`** — lists locally installed Ollama models.
+- **`config list\|get\|set\|path`** (R23) — non-secret defaults
+  (`backend`/`model`/`level`) stored at the platform config location.
+  Precedence: flags > environment > config file > built-in defaults. API keys
+  remain env-only and are refused as config keys.
 - **Windows/PowerShell robustness** — UTF-8 BOM, UTF-16LE/BE detection
   (BOM or 0x00-at-odd-offsets), CRLF normalization, ANSI escape stripping.
 - **Exit-code contract** — `0` ok · `1` unexpected · `2` usage · `3` backend
@@ -91,7 +85,8 @@ Transfer macOS app, on Windows, Linux and macOS. Zero runtime dependencies.
 ### Security
 
 - **API keys are never command-line flags** (shell history / `ps` leakage);
-  env vars only (`ANTHROPIC_API_KEY`, `NVIDIA_API_KEY`).
+  env vars only (`ANTHROPIC_API_KEY`, `NVIDIA_API_KEY`, `OPENAI_API_KEY`,
+  `OPENROUTER_API_KEY`).
 - **Local-first by default** — Ollama is the default backend; the CLI
   performs no telemetry and no update checks, ever.
 - **Zero runtime dependencies** — the supply-chain surface is TypeScript and

@@ -187,6 +187,8 @@ npm run check-prompt  # verify no drift (runs in CI)
 npm pack --dry-run    # inspect the publishable tarball
 ```
 
+Releasing: see [PUBLISHING.md](PUBLISHING.md) — one-time npm bootstrap plus the per-release tag checklist.
+
 > **Model tip:** tiny local models (e.g. `llama3.2:3b`) are fast but unreliable for extraction — they drop sections (triggering the ⚠️ warning path) and tend to **hallucinate URLs** in Resources & Links. Prefer ~8B+ models like the default `qwen3:8b`, and always sanity-check links from sub-8B models.
 
 ## License
