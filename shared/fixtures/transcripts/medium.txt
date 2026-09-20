@@ -1,0 +1,13 @@
+User: We're debugging a memory leak in our Node.js ingestion service. Here's the context. The service consumes from Kafka, transforms records, and writes to Postgres. RSS grows about 40 MB per hour until the container hits its 2 GB limit and gets OOM-killed. Grafana: https://grafana.internal.example.com/d/ingest/memory
+
+Assistant: First suspects, in order: (1) an unbounded in-memory queue between the Kafka consumer and the writer, (2) a Map used as a de-dupe cache that never evicts, (3) pg pool leaks from un-released clients on error paths. Grab a heap snapshot with `node --heapsnapshot-signal=SIGUSR2` and compare two snapshots an hour apart. Node heap docs: https://nodejs.org/api/cli.html#cli_heapsnapshot_signal_sigusr2
+
+User: Snapshot comparison shows the de-dupe Map holds 1.2M entries. It was supposed to be bounded.
+
+Assistant: Fix: replace the Map with a small LRU. Max size 100k, TTL 30 minutes — de-dupes are only meaningful within one consumer session anyway. Do NOT raise the container memory limit; the leak is real and the limit is the safety net.
+
+User: OK. Also the pg pool shows 40 idle clients and our pool max is 20. That smells like the error path never calls client.release().
+
+Assistant: Exactly — wrap every query in try/finally with client.release() in the finally block, or better, use pool.query() which manages the client for you unless you need a transaction. Audit the transaction paths in writer.ts and transformer.ts. Postgres pool docs: https://node-postgres.com/apis/pool
+
+User: Decided: LRU for de-dupe, pool.query() everywhere except the one transaction in writer.ts. Follow-up tomorrow on why container restarts take 90 seconds — the readiness probe timing seems off. K8s probe config: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/

@@ -1,0 +1,47 @@
+name: CLI Release
+
+on:
+  push:
+    tags: ['cli-v*']
+
+permissions:
+  id-token: write   # npm provenance (TRD §14)
+  contents: write   # GitHub Release
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: 'https://registry.npmjs.org/'
+
+      - name: Assert the tag matches cli/package.json version (TRD §14 step 1)
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG_VERSION="${GITHUB_REF_NAME#cli-}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "tag cli-$TAG_VERSION does not match package version $PKG_VERSION" >&2
+            exit 1
+          fi
+
+      - name: Install
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Publish to npm with provenance (TRD §14 step 3)
+        run: npm publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create the GitHub Release (TRD §14 step 4)
+        run: gh release create "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}

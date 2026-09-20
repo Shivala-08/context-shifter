@@ -1,0 +1,14 @@
+Conversation with Claude about migrating a blog from WordPress to Astro:
+
+User: I'm planning to move my blog off WordPress to Astro. The current site has about 180 posts, mostly markdown-ish HTML with shortcodes. What's the plan?
+
+Claude: Key points to settle first:
+1. Frontmatter mapping — WordPress export gives you wp:postmeta; you'll map title/date/slug/categories into Astro's content collections schema (docs: https://docs.astro.build/en/guides/content-collections/).
+2. Shortcode handling — you use [gallery] and [caption] shortcodes; decide between rehype-transform or a prebuild script to convert them to MDX components.
+3. URL preservation — your permalink structure is /%year%/%postname%/, so configure Astro's build.format and trailingSlash to avoid 404s; keep sitemap.xml identical.
+4. Images — WordPress media lives in wp-content/uploads; either keep hotlinking during transition or download and rewrite with a remark plugin.
+5. Comments — moving to giscus on GitHub Discussions (https://giscus.app).
+
+User: The importer script should be Node, output JSON first, then MDX. Constraint: I refuse to touch PHP, so anything that needs WP-CLI is out.
+
+Claude: Agreed — staged migration: WordPress export -> JSON intermediate -> MDX. Redirect map for changed slugs. Validate with a link checker before DNS cutover. Open issue: whether draft posts should be migrated as drafts or dropped. Reference implementation for the export step: https://github.com/akheron/wordpress-export-to-markdown

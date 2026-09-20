@@ -1,0 +1,22 @@
+so yesterday we talked about the cache layer rewrite. recap:
+
+the old cache was a simple dict with no TTL. it leaked entries for
+deleted documents. we agreed on:
+
+1. Redis with a 15 minute TTL for hot documents
+2. read-through pattern, no write-behind (too risky for now)
+3. keep the in-process LRU as layer one, 10k entries max
+
+the migration script lives at https://gitlab.internal.example.com/platform/cache-migration
+and the RFC is https://wiki.internal.example.com/rfc/cache-layer-v2
+
+we also decided the stale-while-revalidate window is 30 seconds. anything
+longer and users complained during the experiment last quarter.
+
+open items: whether to shard by tenant or by document id, and whether the
+metrics dashboards need a new panel for hit ratio per layer
+(dashboards: https://grafana.internal.example.com/d/cache/overview).
+
+oh and someone asked about the old memcached tier — that's being
+decommissioned, no migration needed, just delete the feature flag after
+cutover.

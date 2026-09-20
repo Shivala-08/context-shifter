@@ -1,0 +1,54 @@
+name: CLI CI
+
+on:
+  push:
+    branches: [main]
+    paths: ['cli/**', 'shared/**', '.github/workflows/cli-ci.yml']
+  pull_request:
+    paths: ['cli/**', 'shared/**', '.github/workflows/cli-ci.yml']
+
+jobs:
+  test:
+    name: ${{ matrix.os }} · Node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: cli
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Install
+        run: npm ci
+      - name: Shared-prompt drift check (TRD §5.3)
+        run: node scripts/sync-prompt.mjs --check
+      - name: Test
+        run: npm test
+      - name: Pack dry-run (size + file list)
+        run: npm pack --dry-run
+
+  pack-install:
+    name: Pack & install smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm test
+      - name: Install the tarball and smoke-test the binary
+        run: |
+          npm pack
+          npm install -g ./context-shifter-*.tgz
+          context-shifter --version
+          cshift --help > /dev/null

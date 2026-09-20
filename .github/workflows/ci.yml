@@ -16,20 +16,4 @@ jobs:
       - name: Test
         run: swift test
 
-  cli:
-    name: CLI (Node 18)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-      - name: Check prompt sync (drift guard)
-        run: node sync-prompt.js --check
-      - name: Lint syntax
-        run: node --check bin/context-transfer.js && node --check src/prompt.js && node --check src/validate.js && node --check src/config.js && node --check src/backends/ollama.js && node --check src/backends/anthropic.js && node --check src/backends/nim.js
-      - name: Test
-        run: npm test
+  # The CLI has its own workflow: .github/workflows/cli-ci.yml (TRD §14).
