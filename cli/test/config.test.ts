@@ -15,14 +15,24 @@ function tempDir(): string {
 
 test('configFilePath honours an absolute XDG_CONFIG_HOME', () => {
   const xdg = tempDir();
-  const file = configFilePath({ XDG_CONFIG_HOME: xdg });
+  // Pin the POSIX branch explicitly — a Windows runner would otherwise take
+  // the APPDATA branch and this test would assert the wrong thing.
+  const file = configFilePath({ XDG_CONFIG_HOME: xdg }, 'linux');
   assert.equal(file, path.join(xdg, 'context-shifter', 'config.json'));
 });
 
 test('a relative XDG_CONFIG_HOME is ignored per the XDG spec', () => {
-  const file = configFilePath({ XDG_CONFIG_HOME: 'relative/path' });
+  const file = configFilePath({ XDG_CONFIG_HOME: 'relative/path' }, 'linux');
   assert.ok(path.isAbsolute(file));
   assert.ok(file.endsWith(path.join('.config', 'context-shifter', 'config.json')));
+});
+
+test('configFilePath on win32 ignores XDG_CONFIG_HOME in favour of APPDATA', () => {
+  const file = configFilePath(
+    { XDG_CONFIG_HOME: '/tmp/xdg', APPDATA: 'C:\\Users\\x\\Roaming' } as NodeJS.ProcessEnv,
+    'win32'
+  );
+  assert.equal(file, path.join('C:\\Users\\x\\Roaming', 'context-shifter', 'config.json'));
 });
 
 test('configBaseDir uses APPDATA on win32 (and falls back without it)', () => {
@@ -79,10 +89,14 @@ test('values are validated: level and backend are constrained, values cannot be 
 
 test('runConfig: get/list/path work against an explicit (empty) home and set writes', async () => {
   const dir = tempDir();
-  const env = { XDG_CONFIG_HOME: dir } as NodeJS.ProcessEnv;
-  const file = configFilePath(env);
-  const saved = process.env.XDG_CONFIG_HOME;
-  process.env.XDG_CONFIG_HOME = dir;
+  // Steer via the env var the running platform actually honours (XDG on
+  // POSIX, APPDATA on Windows) so this E2E check holds across the CI matrix.
+  const [envKey] = process.platform === 'win32'
+    ? (['APPDATA', 'XDG_CONFIG_HOME'] as const)
+    : (['XDG_CONFIG_HOME', 'APPDATA'] as const);
+  const file = configFilePath({ [envKey]: dir } as NodeJS.ProcessEnv);
+  const saved = process.env[envKey];
+  process.env[envKey] = dir;
   try {
     assert.equal(await runConfig(['path']), 0);
     assert.equal(await runConfig(['get', 'backend']), 0);
@@ -91,8 +105,8 @@ test('runConfig: get/list/path work against an explicit (empty) home and set wri
     const onDisk = JSON.parse(fs.readFileSync(file, 'utf8')) as { level?: string };
     assert.equal(onDisk.level, 'full');
   } finally {
-    if (saved === undefined) delete process.env.XDG_CONFIG_HOME;
-    else process.env.XDG_CONFIG_HOME = saved;
+    if (saved === undefined) delete process.env[envKey];
+    else process.env[envKey] = saved;
   }
 });
 

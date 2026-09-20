@@ -22,6 +22,6 @@ export function configBaseDir(env: NodeJS.ProcessEnv = process.env, platform: No
   return path.join(os.homedir(), '.config');
 }
 
-export function configFilePath(env: NodeJS.ProcessEnv = process.env): string {
-  return path.join(configBaseDir(env), 'context-shifter', 'config.json');
+export function configFilePath(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform): string {
+  return path.join(configBaseDir(env, platform), 'context-shifter', 'config.json');
 }
