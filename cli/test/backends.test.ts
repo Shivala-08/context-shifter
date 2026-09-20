@@ -5,6 +5,8 @@ import type { AddressInfo } from 'node:net';
 
 import { createAnthropicBackend } from '../src/backends/anthropic.js';
 import { createNimBackend } from '../src/backends/nim.js';
+import { createOpenAiBackend } from '../src/backends/openai.js';
+import { createOpenRouterBackend } from '../src/backends/openrouter.js';
 import { createOllamaBackend, isLoopbackHost } from '../src/backends/ollama.js';
 import { BackendError } from '../src/backends/types.js';
 import type { Backend, CompletionRequest } from '../src/backends/types.js';
@@ -344,6 +346,109 @@ test('nim: API error object in a 200 envelope surfaces the message', async () =>
   } finally {
     await mock.close();
     delete process.env.NVIDIA_API_KEY;
+  }
+});
+
+// ---------- OpenAI-compatible presets (openai / openrouter) ----------
+
+test('openai: sends the classic shape and parses the OpenAI-compatible response', async () => {
+  const mock = await startMock(() => ({
+    status: 200,
+    body: JSON.stringify({
+      choices: [{ message: { content: CARD } }],
+      usage: { prompt_tokens: 90, completion_tokens: 25 },
+    }),
+  }));
+  try {
+    process.env.OPENAI_API_KEY = 'sk-test';
+    const backend = createOpenAiBackend({ baseUrl: mock.url });
+    const res = await backend.complete(REQ, new AbortController().signal);
+    assert.equal(res.text, CARD);
+    assert.deepEqual(res.usage, { inputTokens: 90, outputTokens: 25 });
+
+    assert.equal(mock.requests[0]?.headers?.authorization, 'Bearer sk-test');
+    const body = mock.requests[0]?.body as { model?: string; max_tokens?: number; temperature?: number; max_completion_tokens?: number };
+    assert.equal(body.model, 'gpt-4o-mini');
+    assert.equal(body.max_tokens, REQ.maxOutputTokens);
+    assert.equal(body.temperature, REQ.temperature);
+    assert.equal(body.max_completion_tokens, undefined);
+  } finally {
+    await mock.close();
+    delete process.env.OPENAI_API_KEY;
+  }
+});
+
+test('openai: a 400 demanding max_completion_tokens is retried in that shape without temperature', async () => {
+  const mock = await startMock((req) => {
+    const body = req.body as { max_tokens?: number; max_completion_tokens?: number; temperature?: number };
+    if (body.max_tokens !== undefined) {
+      return { status: 400, body: JSON.stringify({ error: { message: "Use 'max_completion_tokens' instead of 'max_tokens'." } }) };
+    }
+    return {
+      status: 200,
+      body: JSON.stringify({ choices: [{ message: { content: CARD } }], usage: { prompt_tokens: 10, completion_tokens: 5 } }),
+    };
+  });
+  try {
+    process.env.OPENAI_API_KEY = 'sk-test';
+    const backend = createOpenAiBackend({ baseUrl: mock.url, model: 'o4-mini' });
+    const res = await backend.complete(REQ, new AbortController().signal);
+    assert.equal(res.text, CARD);
+    assert.equal(mock.requests.length, 2);
+    const first = mock.requests[0]?.body as { max_tokens?: number };
+    const second = mock.requests[1]?.body as { max_completion_tokens?: number; temperature?: number };
+    assert.equal(first.max_tokens, REQ.maxOutputTokens);
+    assert.equal(second.max_completion_tokens, REQ.maxOutputTokens);
+    assert.equal(second.temperature, undefined);
+  } finally {
+    await mock.close();
+    delete process.env.OPENAI_API_KEY;
+  }
+});
+
+test('openai: missing key fails fast with exit 4 before any network call', async () => {
+  delete process.env.OPENAI_API_KEY;
+  const err = await expectBackendError(
+    () => createOpenAiBackend({ baseUrl: 'http://127.0.0.1:1' }).complete(REQ, new AbortController().signal),
+    4
+  );
+  assert.match(err.hint ?? '', /OPENAI_API_KEY/);
+});
+
+test('openrouter: sends vendor/model ids and honors OPENROUTER_MODEL', async () => {
+  const mock = await startMock(() => ({
+    status: 200,
+    body: JSON.stringify({ choices: [{ message: { content: CARD } }] }),
+  }));
+  try {
+    process.env.OPENROUTER_API_KEY = 'sk-or-test';
+    process.env.OPENROUTER_MODEL = 'anthropic/claude-sonnet-4.5';
+    const backend = createOpenRouterBackend({ baseUrl: mock.url });
+    const res = await backend.complete(REQ, new AbortController().signal);
+    assert.equal(res.text, CARD);
+
+    const body = mock.requests[0]?.body as { model?: string };
+    assert.equal(body.model, 'anthropic/claude-sonnet-4.5');
+    assert.equal(mock.requests[0]?.headers?.authorization, 'Bearer sk-or-test');
+  } finally {
+    await mock.close();
+    delete process.env.OPENROUTER_API_KEY;
+    delete process.env.OPENROUTER_MODEL;
+  }
+});
+
+test('openrouter: 401 maps to exit 4 naming OPENROUTER_API_KEY', async () => {
+  const mock = await startMock(() => ({ status: 401, body: '{"error":{"message":"bad key"}}' }));
+  try {
+    process.env.OPENROUTER_API_KEY = 'sk-or-bad';
+    const err = await expectBackendError(
+      () => createOpenRouterBackend({ baseUrl: mock.url }).complete(REQ, new AbortController().signal),
+      4
+    );
+    assert.match(err.hint ?? '', /OPENROUTER_API_KEY/);
+  } finally {
+    await mock.close();
+    delete process.env.OPENROUTER_API_KEY;
   }
 });
 

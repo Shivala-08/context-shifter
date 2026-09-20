@@ -114,6 +114,7 @@ Priority: **P0** = must ship in v0.1.0, **P1** = v0.2, **P2** = later.
 | R12 | API keys are **never** accepted as command-line flags (shell history/`ps` leakage). Env var, or optional config file with 0600 permissions. | P0 |
 | R13 | `--offline` refuses any non-loopback backend, making the "0 network calls" claim enforceable and testable. | P0 |
 | R14 | `models` command lists locally installed Ollama models. | P1 |
+| R28 | `--backend openai` and `--backend openrouter` presets on a shared OpenAI-compatible client (NIM refactored onto the same layer). Keys: `OPENAI_API_KEY` / `OPENROUTER_API_KEY`, env-only per R12. OpenRouter gives one-key access to `vendor/model` ids from every major lab. | P1 |
 
 ### 6.3 Output and integration
 
@@ -231,9 +232,9 @@ Adoption numbers (stars, npm downloads) are worth watching but not gating; the r
 
 | # | Question | Recommendation | Status |
 |---|---|---|---|
-| D1 | `context-transfer` or `context-shifter`? | `context-shifter` (matches repo); update site demos. | **Needs your call** |
+| D1 | `context-transfer` or `context-shifter`? | **Decided 2026-09-20.** `context-shifter` (matches repo); repo docs now demo `context-shifter` everywhere, and the landing page demos are being renamed from `context-transfer` to `context-shifter` (the CLI's `--extract` alias keeps the site's old examples working during the transition). | **Decided** |
 | D2 | What ships beyond core extraction? | P0/P1 list in §6. Highest-value extras: chunking (R7), link-fidelity check (R5), `--offline` (R13), `--from chatgpt-export` (R19). | Proposed |
 | D3 | How to version the app and CLI? | Independent semver each (`v*` for the app, `cli-v*` for the CLI) plus a shared `CARD_SPEC_VERSION`. Bump the spec only on breaking card-format changes. | Proposed |
 | D4 | Date format in cards | ISO 8601 with local offset. | Proposed |
 | D5 | Should the app adopt the CLI's link-fidelity check? | Yes, as a follow-up; it's a small Swift change with a clear quality win. | Later |
-| D6 | Default Anthropic model | Mirror the app (`claude-sonnet-4-6` per README). Newer Sonnet IDs exist, so decide whether the app and CLI move together. | Open |
+| D6 | Default Anthropic model | **Decided 2026-09-20.** Ollama: `qwen3:8b` — verified as the app's real default (`OllamaBackend.model` in `Sources/`), so the CLI mirrors the app; the README/site examples (`llama3.2:3b` / `llama3.1:8b`) were stale docs (F3), not behaviour. Anthropic: `claude-sonnet-4-6` — verified identical in app (`AnthropicBackend.model`) and CLI; the two move together on future bumps. Both implemented in `cli/src/backends/*`. | **Decided** |

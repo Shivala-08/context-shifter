@@ -7,9 +7,11 @@ import { CliError, EXIT } from '../core/errors.js';
 import { createAnthropicBackend } from './anthropic.js';
 import { createNimBackend } from './nim.js';
 import { createOllamaBackend } from './ollama.js';
+import { createOpenAiBackend } from './openai.js';
+import { createOpenRouterBackend } from './openrouter.js';
 import type { Backend, BackendId } from './types.js';
 
-export const BACKEND_IDS: readonly BackendId[] = ['ollama', 'anthropic', 'nim'];
+export const BACKEND_IDS: readonly BackendId[] = ['ollama', 'anthropic', 'nim', 'openai', 'openrouter'];
 
 export function createBackend(id: string, options: { host?: string; model?: string; ctx?: number } = {}): Backend {
   switch (id) {
@@ -19,6 +21,10 @@ export function createBackend(id: string, options: { host?: string; model?: stri
       return createAnthropicBackend({ model: options.model });
     case 'nim':
       return createNimBackend({ model: options.model });
+    case 'openai':
+      return createOpenAiBackend({ model: options.model });
+    case 'openrouter':
+      return createOpenRouterBackend({ model: options.model });
     default:
       throw new CliError(EXIT.USAGE, `Unknown backend "${id}". Valid options: ${BACKEND_IDS.join(', ')}.`);
   }

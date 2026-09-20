@@ -52,3 +52,8 @@ jobs:
           npm install -g ./context-shifter-*.tgz
           context-shifter --version
           cshift --help > /dev/null
+      - name: Fake-backend extract through the installed binary (TRD §13)
+        # In-process mock Ollama on 127.0.0.1 + --offline: proves the packed
+        # binary extracts, validates, and emits a card with zero non-loopback
+        # network and no model installed.
+        run: node scripts/fake-backend-extract.mjs

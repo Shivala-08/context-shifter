@@ -69,9 +69,11 @@ test('unknown keys and secret-shaped keys are refused', () => {
 
 test('values are validated: level and backend are constrained, values cannot be empty', () => {
   assert.throws(() => validateConfigValue('level', 'turbo'), (err: unknown) => err instanceof CliError && err.exitCode === 2);
-  assert.throws(() => validateConfigValue('backend', 'openai'), (err: unknown) => err instanceof CliError && err.exitCode === 2);
+  assert.throws(() => validateConfigValue('backend', 'gemini'), (err: unknown) => err instanceof CliError && err.exitCode === 2);
   assert.throws(() => validateConfigValue('model', '   '), (err: unknown) => err instanceof CliError);
   assert.doesNotThrow(() => validateConfigValue('backend', 'nim'));
+  assert.doesNotThrow(() => validateConfigValue('backend', 'openai'));
+  assert.doesNotThrow(() => validateConfigValue('backend', 'openrouter'));
   assert.doesNotThrow(() => validateConfigValue('model', 'qwen3:8b'));
 });
 

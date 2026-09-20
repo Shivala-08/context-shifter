@@ -28,7 +28,7 @@ Usage:
   context-shifter config list|get|set|path     manage saved defaults (backend/model/level)
 
 Options:
-  --backend <name>   ollama (default, local & free) | anthropic | nim
+  --backend <name>   ollama (default, local & free) | anthropic | nim | openai | openrouter
   --model <name>     Model override (default: qwen3:8b for Ollama; backend-specific otherwise)
   --host <url>       Ollama host override (default: OLLAMA_HOST env or http://127.0.0.1:11434)
   --level <name>     full | balanced (default) | minimal — same semantics as the Mac app
@@ -48,6 +48,8 @@ Environment:
   OLLAMA_HOST              Ollama host (default http://127.0.0.1:11434)
   ANTHROPIC_API_KEY        Required for --backend anthropic
   NVIDIA_API_KEY           Required for --backend nim (NVIDIA_NIM_API_KEY accepted)
+  OPENAI_API_KEY           Required for --backend openai
+  OPENROUTER_API_KEY       Required for --backend openrouter
   NIM_BASE_URL             NIM endpoint override (default https://integrate.api.nvidia.com/v1)
   CONTEXT_SHIFTER_BACKEND / _MODEL / _LEVEL   Defaults when flags are absent
   Precedence: flags > environment > config file (see "config path") > built-in defaults.

@@ -12,7 +12,7 @@ A native macOS app (SwiftUI) that takes a pasted LLM/app conversation, extracts 
 Two interchangeable extraction backends behind one protocol, selectable in Settings:
 
 1. **Cloud backend** — Anthropic API (`https://api.anthropic.com/v1/messages`), model `claude-sonnet-4-6`, requires user's own API key.
-2. **Local backend** — Ollama running on the user's Mac (`http://localhost:11434/api/generate`), model `llama3.1:8b` (or whatever the user has pulled), no API key required, requires Ollama to be installed and running.
+2. **Local backend** — Ollama running on the user's Mac (`http://localhost:11434/api/generate`), model `qwen3:8b` (or whatever the user has pulled), no API key required, requires Ollama to be installed and running.
 
 Both backends receive the same system prompt and return the same markdown-formatted context card, so the rest of the app is backend-agnostic.
 
@@ -98,7 +98,7 @@ Create `SettingsView.swift`, presented as a sheet:
 - Verify: switching the backend picker in Settings actually changes which backend `ContentView` uses on the next extraction — don't cache the backend instance across the picker changing.
 
 ## Task 8 — Write README.md
-Cover: how to open in Xcode and run (Cmd+R), how to get an Anthropic key (console.anthropic.com) OR how to install Ollama and pull a model (`brew install ollama`, `ollama pull llama3.1:8b`, `ollama serve`), and the App Sandbox / Outgoing Connections capability requirement from Task 1.
+Cover: how to open in Xcode and run (Cmd+R), how to get an Anthropic key (console.anthropic.com) OR how to install Ollama and pull a model (`brew install ollama`, `ollama pull qwen3:8b`, `ollama serve`), and the App Sandbox / Outgoing Connections capability requirement from Task 1.
 
 ## Acceptance checklist
 - [ ] App builds and runs via Cmd+R with no errors

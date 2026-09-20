@@ -269,21 +269,29 @@ export interface Backend {
 - `GET {OLLAMA_HOST}/api/tags` lists installed models (used by `models` and `doctor`).
 - Timeout: 120 s per call (cold model load can be slow), no automatic retry on timeout beyond the single validation retry.
 - `ECONNREFUSED` → exit 3 with `Ollama isn't reachable at <host>. Start it with: ollama serve`. Model not found → exit 3 with `ollama pull <model>`.
-- Default model: mirror the app's default **(verify: README example says `llama3.2:3b`, the landing page says `llama3.1:8b`; pick one and put it in the shared spec, F3)**. `doctor` warns if the chosen model is very small, since small models fail validation more often.
+- Default model: **`qwen3:8b`** — mirrors the app (verified: `OllamaBackend.model` in `Sources/ContextTransfer/OllamaBackend.swift`), which closes the F3 question: the README's `llama3.2:3b` and the landing page's `llama3.1:8b` were stale doc examples, not the app's real default. `doctor` warns if the chosen model is smaller than 8B, since small models drop sections and hallucinate links more often.
 
 ### 7.2 Anthropic
 
 - `POST https://api.anthropic.com/v1/messages`, headers `x-api-key`, `anthropic-version: 2023-06-01`, `content-type: application/json`. Body `{ model, max_tokens, temperature, system, messages: [{role:'user', content}] }`. Text is the concatenation of `content[].text` blocks; usage from `usage.input_tokens` / `usage.output_tokens`.
-- Default model mirrors the app (`claude-sonnet-4-6` per the README). Model IDs are just strings, so `--model` covers newer ones; decide whether app and CLI defaults move together (PRD D6).
+- Default model: `claude-sonnet-4-6`, verified identical to the app (`AnthropicBackend.model`) — PRD D6 settled: the CLI mirrors the app and the two move together (bump both in one PR when the app upgrades). Model IDs are just strings, so `--model` covers newer ones without a CLI release.
 - 401/403 → exit 4. 429/5xx → up to 2 retries with exponential backoff + jitter, honouring `retry-after`. This transport retry is separate from the validation retry.
 - Input budget: 100k tokens by default (conservative; well under the model's real window).
 
-### 7.3 NVIDIA NIM
+### 7.3 OpenAI-compatible presets (nim, openai, openrouter)
 
-- OpenAI-compatible: `POST {NIM_BASE_URL}/chat/completions`, `Authorization: Bearer $NVIDIA_API_KEY`, body `{ model, messages, temperature, max_tokens }`. Text is `choices[0].message.content`; usage from `usage.prompt_tokens` / `usage.completion_tokens`.
-- Default base URL `https://integrate.api.nvidia.com/v1`. **Model IDs and free-tier limits change; verify at build time** and don't hard-code more than one default.
-- Input budget: 24k tokens by default (varies per model; override with `--ctx`).
-- Same error/retry policy as Anthropic.
+One shared client (`backends/openai-compat.ts`), three presets — `POST {base}/chat/completions` with Bearer auth; text is `choices[0].message.content`; usage from `usage.prompt_tokens` / `usage.completion_tokens`.
+
+| Preset | Base URL | Key env var(s) | Default model | Input budget |
+|---|---|---|---|---|
+| `nim` | `integrate.api.nvidia.com/v1` (`NIM_BASE_URL` override) | `NVIDIA_API_KEY` (legacy `NVIDIA_NIM_API_KEY`) | `meta/llama-3.1-8b-instruct` | 24k |
+| `openai` | `api.openai.com/v1` | `OPENAI_API_KEY` | `gpt-4o-mini` | 100k |
+| `openrouter` | `openrouter.ai/api/v1` | `OPENROUTER_API_KEY` | `openai/gpt-4o-mini` | 24k |
+
+- Same error/retry policy as Anthropic (429/5xx backoff honouring `retry-after`; 401/403 → exit 4).
+- **Newer OpenAI reasoning models reject `max_tokens`** (they require `max_completion_tokens`, and some reject `temperature` too): on a 400 whose body mentions `max_completion_tokens`, the client retries once in that shape without `temperature`.
+- **Model IDs and free-tier limits change; verify defaults at release time** and don't hard-code more than one per preset. OpenRouter model ids are `vendor/model` strings (e.g. `anthropic/claude-sonnet-4.5`); `--model` always overrides.
+- Presets stay thin: base URL, key env vars, default model, budget. Anything per-vendor beyond that does not belong in a preset.
 
 ### 7.4 `--offline`
 
@@ -425,7 +433,7 @@ The existing app tag `v0.1.0` is untouched. The `cli-v*` glob does not match a `
 ## 15. Error handling and UX rules
 
 - Every error is a `CliError { code, message, hint }`; `main()` maps to exit codes in §4.5 and prints `error: <message>` plus an optional `hint:` line. Stack traces only with `CONTEXT_SHIFTER_DEBUG=1`.
-- Errors are actionable: name the fix (`ollama serve`, `ollama pull llama3.1:8b`, `export ANTHROPIC_API_KEY=…`).
+- Errors are actionable: name the fix (`ollama serve`, `ollama pull qwen3:8b`, `export ANTHROPIC_API_KEY=…`).
 - SIGINT during a request aborts the fetch via `AbortController` and exits 130 with no partial stdout.
 - Broken pipe (`EPIPE` on stdout) exits quietly.
 
@@ -453,7 +461,7 @@ These are the assumptions I could not confirm from public pages:
 2. Exact card heading level/names and what the app's validator checks (headings only, or more).
 3. Date format the app emits in "Captured on".
 4. How the app handles over-long input today (truncate vs. fail vs. chunk).
-5. The app's default Ollama model and default Anthropic model (README and site disagree on Ollama).
+5. ~~The app's default Ollama model and default Anthropic model~~ **Resolved 2026-09-20:** verified in `Sources/` — the app defaults to `qwen3:8b` (`OllamaBackend.swift`) and `claude-sonnet-4-6` (`AnthropicBackend.swift`); the CLI matches both. The README/site examples (`llama3.2:3b`, `llama3.1:8b`) were stale docs (F3), not app behaviour.
 6. Whether NIM is actually implemented in the app or only advertised on the site.
 7. The app's retry policy details (count, temperature, what the retry prompt says).
 8. Current NIM model IDs and limits; current ChatGPT/Claude export JSON shapes.

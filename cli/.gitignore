@@ -7,3 +7,4 @@ release-notes.md
 
 node_modules/
 npm-debug.log*
+*.tgz

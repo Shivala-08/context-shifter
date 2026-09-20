@@ -61,18 +61,20 @@ export async function runDoctor(): Promise<number> {
   }
 
   // Cloud keys (informational — the local path needs none)
-  const anthropicKey = (process.env.ANTHROPIC_API_KEY || '').trim();
-  checks.push(
-    anthropicKey
-      ? { status: 'pass', name: 'Anthropic key', detail: 'ANTHROPIC_API_KEY is set' }
-      : { status: 'warn', name: 'Anthropic key', detail: 'ANTHROPIC_API_KEY not set (only needed for --backend anthropic)' }
-  );
-  const nimKey = (process.env.NVIDIA_API_KEY || process.env.NVIDIA_NIM_API_KEY || '').trim();
-  checks.push(
-    nimKey
-      ? { status: 'pass', name: 'NVIDIA key', detail: 'NVIDIA_API_KEY is set' }
-      : { status: 'warn', name: 'NVIDIA key', detail: 'NVIDIA_API_KEY not set (only needed for --backend nim)' }
-  );
+  const cloudKeys: Array<{ name: string; envs: string[]; backend: string }> = [
+    { name: 'Anthropic key', envs: ['ANTHROPIC_API_KEY'], backend: 'anthropic' },
+    { name: 'NVIDIA key', envs: ['NVIDIA_API_KEY', 'NVIDIA_NIM_API_KEY'], backend: 'nim' },
+    { name: 'OpenAI key', envs: ['OPENAI_API_KEY'], backend: 'openai' },
+    { name: 'OpenRouter key', envs: ['OPENROUTER_API_KEY'], backend: 'openrouter' },
+  ];
+  for (const { name, envs, backend } of cloudKeys) {
+    const value = envs.map((e) => (process.env[e] || '').trim()).find(Boolean);
+    checks.push(
+      value
+        ? { status: 'pass', name, detail: `${envs[0]} is set` }
+        : { status: 'warn', name, detail: `${envs[0]} not set (only needed for --backend ${backend})` }
+    );
+  }
 
   // Clipboard tool
   const clip = resolveClipboardCommand();

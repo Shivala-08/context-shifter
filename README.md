@@ -25,7 +25,7 @@ A native macOS menu bar app that turns any LLM or app conversation into a portab
 - **Compression levels** — Full / Balanced / Minimal control how much of the conversation survives into the card; the panel reports the reduction (e.g. `18.4k → 2.1k tokens · 89% smaller`)
 - **Launch at login** — toggle in Settings
 - **Zero dependencies** — SwiftUI + AppKit, `URLSession` for all HTTP
-- **Cross-platform CLI companion** — `npx context-transfer` runs the same extraction on any OS with Node 18+ ([cli/README.md](cli/README.md))
+- **Cross-platform CLI companion** — `npx context-shifter` runs the same extraction on any OS with Node 20+ ([cli/README.md](cli/README.md))
 
 ---
 
@@ -78,7 +78,7 @@ Longer-form design docs (PRD, TRD, build manual) live in [docs/](docs/).
 ## Backends
 
 **Local — Ollama** *(default)* · 100% local, free
-Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `llama3.2:3b`).
+Install [Ollama](https://ollama.com), run `ollama serve`, pull a model (e.g. `qwen3:8b`).
 
 > **Model tip:** stick to ~8B models and up (the default is `qwen3:8b`). Tiny models like `llama3.2:3b` are fast but unreliable here — they tend to drop sections, trigger the "review before using" warning, and **invent plausible-looking URLs** in Resources & Links, which is the one section where fabrication is worse than omission. Always sanity-check the links on any card from a sub-8B model.
 
@@ -94,11 +94,11 @@ Local is the default. Switch in Settings → Extraction backend.
 The same extraction as a zero-dependency terminal tool — pipe a conversation in, get the identical context card out:
 
 ```bash
-pbpaste | npx context-transfer                 # macOS clipboard → card
-context-transfer --backend anthropic --file notes.txt
+pbpaste | npx context-shifter extract          # macOS clipboard → card
+context-shifter extract notes.txt --backend anthropic
 ```
 
-Local Ollama by default (no API key needed); Anthropic and NVIDIA NIM via environment variables. Cards produced by either tool are interchangeable — both read the same extraction template from [`prompt/extraction-template.md`](prompt/extraction-template.md). Full usage in [cli/README.md](cli/README.md).
+Local Ollama by default (no API key needed); Anthropic, NVIDIA NIM, OpenAI and OpenRouter via environment variables. Cards produced by either tool are interchangeable — both read the same extraction template from [`prompt/extraction-template.md`](prompt/extraction-template.md). Full usage in [cli/README.md](cli/README.md).
 
 ---
 

@@ -47,7 +47,7 @@ trap cleanup EXIT
 # ---------- preflight ----------
 
 command -v swiftc >/dev/null 2>&1 || { echo "error: swiftc not found (install Swift / Xcode CLIs)"; exit 2; }
-command -v node   >/dev/null 2>&1 || { echo "error: node not found (Node 18+ required)"; exit 2; }
+command -v node   >/dev/null 2>&1 || { echo "error: node not found (Node 20+ required)"; exit 2; }
 curl -sf --max-time 3 "$HOST/api/tags" >/dev/null 2>&1 \
   || { echo "error: Ollama not reachable at $HOST — run \`ollama serve\` and pull the model (\`ollama pull $MODEL\`)"; exit 2; }
 
@@ -136,10 +136,13 @@ echo "→ running Swift extraction…"
 
 # ---------- CLI run on byte-identical input ----------
 
+echo "→ building CLI…"
+(cd "$ROOT/cli" && npm install --no-fund --no-audit >/dev/null 2>&1 && npm run build >/dev/null)
+
 echo "→ running CLI extraction…"
-node "$ROOT/cli/bin/context-transfer.js" \
-  --model "$MODEL" --host "$HOST" \
-  --file "$WORK/input.txt" --json > "$WORK/cli-card.json"
+node "$ROOT/cli/dist/bin.js" \
+  extract "$WORK/input.txt" \
+  --model "$MODEL" --host "$HOST" --json > "$WORK/cli-card.json"
 
 # ---------- structural comparison ----------
 

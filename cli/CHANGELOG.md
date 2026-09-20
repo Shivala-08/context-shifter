@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`--backend openai` and `--backend openrouter`** — two new cloud presets on
+  a shared OpenAI-compatible client (the NIM backend is now the third preset
+  of the same layer; its behaviour is unchanged). Keys: `OPENAI_API_KEY`,
+  `OPENROUTER_API_KEY` (env-only, as always). OpenRouter unlocks hundreds of
+  models via `vendor/model` ids with one key. Newer OpenAI reasoning models
+  that reject `max_tokens` are handled by an automatic
+  `max_completion_tokens` retry. Defaults: `gpt-4o-mini` (OpenAI),
+  `openai/gpt-4o-mini` (OpenRouter); override with `--model`.
 - **`--json`** (R17) — structured output to stdout: the full card, sections as
   line arrays, token stats, backend, model, level, `spec_version`, the
   validation verdict and any redaction report. `--out`/`--copy` still operate

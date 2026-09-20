@@ -7,7 +7,7 @@
 
 import type { ExitCode } from '../core/errors.js';
 
-export type BackendId = 'ollama' | 'anthropic' | 'nim';
+export type BackendId = 'ollama' | 'anthropic' | 'nim' | 'openai' | 'openrouter';
 
 export interface CompletionRequest {
   system: string;

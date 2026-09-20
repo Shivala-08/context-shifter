@@ -95,6 +95,8 @@ context-shifter doctor
 | **Ollama** *(default)* | `--backend ollama` | none | Local, free, private. Needs `ollama serve` running and the model pulled. |
 | **Anthropic** | `--backend anthropic` | `ANTHROPIC_API_KEY` | `claude-sonnet-4-6` by default, pay per token |
 | **NVIDIA NIM** | `--backend nim` | `NVIDIA_API_KEY` | OpenAI-compatible endpoint, `meta/llama-3.1-8b-instruct` by default |
+| **OpenAI** | `--backend openai` | `OPENAI_API_KEY` | `gpt-4o-mini` by default; newer reasoning models work too — the CLI retries with `max_completion_tokens` automatically |
+| **OpenRouter** | `--backend openrouter` | `OPENROUTER_API_KEY` | Hundreds of models via `vendor/model` ids (`anthropic/claude-sonnet-4.5`, `meta/llama-3.1-8b-instruct`, …); `openai/gpt-4o-mini` by default |
 
 The Ollama path works with **no API key at all** — the "no cost, no signup" path has to work out of the box:
 

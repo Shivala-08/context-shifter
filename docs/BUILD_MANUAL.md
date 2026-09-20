@@ -12,7 +12,7 @@ A native macOS app (SwiftUI) that takes a pasted LLM/app conversation, extracts 
 Two interchangeable extraction backends behind one protocol, selectable in Settings:
 
 1. **Cloud backend** — Anthropic API (`https://api.anthropic.com/v1/messages`), model `claude-sonnet-4-6`, requires user's own API key.
-2. **Local backend** — Ollama running on the user's Mac (`http://localhost:11434/api/generate`), model `llama3.1:8b` (or whatever the user has pulled), no API key required, requires Ollama to be installed and running.
+2. **Local backend** — Ollama running on the user's Mac (`http://localhost:11434/api/generate`), model `qwen3:8b` (or whatever the user has pulled), no API key required, requires Ollama to be installed and running.
 
 Both backends receive the same system prompt and return the same markdown-formatted context card, so the rest of the app is backend-agnostic.
 
@@ -54,7 +54,7 @@ Create `AnthropicBackend.swift`:
 
 ## Task 4 — Implement the local backend
 Create `OllamaBackend.swift`:
-- Struct conforming to `ExtractionBackend`, holding `host: String` (default `"http://localhost:11434"`) and `model: String` (default `"llama3.1:8b"`).
+- Struct conforming to `ExtractionBackend`, holding `host: String` (default `"http://localhost:11434"`) and `model: String` (default `"qwen3:8b"`).
 - POST to `<host>/api/generate` with JSON body `{"model": <model>, "prompt": "<systemPrompt>\n\n<conversation to extract from>\n\n<conversation>", "stream": false}`.
 - Note: Ollama's `/api/generate` doesn't have a separate system-prompt field the same way the Anthropic API does — concatenate the system prompt and the conversation into a single `prompt` string as shown above.
 - Parse response JSON, read the `response` field (a plain string), return it trimmed.
@@ -71,7 +71,7 @@ Create `ContentView.swift`:
 Create `SettingsView.swift`, presented as a sheet:
 - A `Picker` (segmented control) for backend: "Cloud (Anthropic)" vs "Local (Ollama)".
 - When Cloud is selected: a `SecureField` for the Anthropic API key.
-- When Local is selected: a text field for the Ollama host (default `http://localhost:11434`) and a text field for the model name (default `llama3.1:8b`).
+- When Local is selected: a text field for the Ollama host (default `http://localhost:11434`) and a text field for the model name (default `qwen3:8b`).
 - Persist all four values (`backendType`, `anthropicAPIKey`, `ollamaHost`, `ollamaModel`) via `@AppStorage` so they survive app restarts.
 - `ContentView` reads these `@AppStorage` values to construct the right backend instance before each extraction call.
 
@@ -80,7 +80,7 @@ Create `SettingsView.swift`, presented as a sheet:
 - Verify: switching the backend picker in Settings actually changes which backend `ContentView` uses on the next extraction — don't cache the backend instance across the picker changing.
 
 ## Task 8 — Write README.md
-Cover: how to open in Xcode and run (Cmd+R), how to get an Anthropic key (console.anthropic.com) OR how to install Ollama and pull a model (`brew install ollama`, `ollama pull llama3.1:8b`, `ollama serve`), and the App Sandbox / Outgoing Connections capability requirement from Task 1.
+Cover: how to open in Xcode and run (Cmd+R), how to get an Anthropic key (console.anthropic.com) OR how to install Ollama and pull a model (`brew install ollama`, `ollama pull qwen3:8b`, `ollama serve`), and the App Sandbox / Outgoing Connections capability requirement from Task 1.
 
 ## Acceptance checklist
 - [ ] App builds and runs via Cmd+R with no errors
